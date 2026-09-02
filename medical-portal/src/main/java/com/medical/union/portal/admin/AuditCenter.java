@@ -35,10 +35,20 @@ public class AuditCenter {
     private static final Map<String, String> ADMIN_OPERATIONS = Map.of(
             "CREATE", "新增", "UPDATE", "修改", "DELETE", "删除", "ACTION", "操作");
 
-    private static final Map<String, String> ADMIN_TARGETS = Map.of(
-            "USER", "人员", "GROUP", "机构或科室", "CLIENT", "业务系统",
-            "REALM_ROLE", "通用身份", "CLIENT_ROLE", "系统角色",
-            "REALM_ROLE_MAPPING", "身份授权", "CLIENT_ROLE_MAPPING", "系统授权");
+    private static final Map<String, String> ADMIN_TARGETS = Map.ofEntries(
+            Map.entry("USER", "人员"),
+            Map.entry("GROUP", "机构或科室"),
+            Map.entry("GROUP_MEMBERSHIP", "机构科室归属"),
+            Map.entry("CLIENT", "业务系统"),
+            Map.entry("REALM_ROLE", "通用身份"),
+            Map.entry("CLIENT_ROLE", "系统角色"),
+            Map.entry("REALM_ROLE_MAPPING", "身份授权"),
+            Map.entry("CLIENT_ROLE_MAPPING", "系统授权"),
+            Map.entry("REALM", "平台设置"),
+            Map.entry("CLIENT_SCOPE", "身份字段范围"),
+            Map.entry("PROTOCOL_MAPPER", "身份字段映射"),
+            Map.entry("AUTH_FLOW", "登录流程"),
+            Map.entry("REALM_SCOPE_MAPPING", "平台范围授权"));
 
     private final KeycloakAdminClient admin;
 
@@ -69,10 +79,10 @@ public class AuditCenter {
     public List<Entry> adminEvents(int max) {
         List<Entry> entries = new ArrayList<>();
         for (Map<String, Object> event : admin.adminEvents(max)) {
-            String operation = ADMIN_OPERATIONS.getOrDefault(
-                    String.valueOf(event.get("operationType")), String.valueOf(event.get("operationType")));
+            String operationType = String.valueOf(event.get("operationType"));
             String resource = String.valueOf(event.getOrDefault("resourceType", ""));
-            String target = ADMIN_TARGETS.getOrDefault(resource, resource);
+            String path = String.valueOf(event.getOrDefault("resourcePath", ""));
+            String action = describe(operationType, resource, path);
             Object auth = event.get("authDetails");
             String who = "-";
             if (auth instanceof Map<?, ?> details && details.get("userId") != null) {
@@ -80,7 +90,7 @@ public class AuditCenter {
             }
             entries.add(new Entry(
                     stamp(event.get("time")),
-                    operation + target,
+                    action,
                     who,
                     auth instanceof Map<?, ?> details2 && details2.get("ipAddress") != null
                             ? String.valueOf(details2.get("ipAddress")) : "-",
@@ -106,6 +116,19 @@ public class AuditCenter {
                     systems));
         }
         return sessions;
+    }
+
+    /** 把「操作 + 对象」翻译成一句人话，常见动作单独给更贴切的说法。 */
+    private static String describe(String operationType, String resource, String path) {
+        if ("ACTION".equals(operationType) && path.endsWith("/reset-password")) {
+            return "重置密码";
+        }
+        if ("ACTION".equals(operationType) && path.endsWith("/logout")) {
+            return "强制下线";
+        }
+        String operation = ADMIN_OPERATIONS.getOrDefault(operationType, operationType);
+        String target = ADMIN_TARGETS.getOrDefault(resource, resource);
+        return operation + target;
     }
 
     private String displayName(String userId) {
