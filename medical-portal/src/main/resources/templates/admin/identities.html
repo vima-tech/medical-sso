@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{admin/shell :: head('通用身份')}"></head>
+<body>
+<div th:replace="~{admin/shell :: nav('identities')}"></div>
+
+<main class="admin-main narrow">
+    <div th:replace="~{admin/shell :: flash}"></div>
+
+    <section class="admin-heading">
+        <div>
+            <h1>通用身份</h1>
+            <p>跨系统的岗位标识，例如医生、护士。它会随身份信息下发给各业务系统，供其判断岗位。
+                人员的具体身份在「人员管理」里勾选。</p>
+        </div>
+    </section>
+
+    <table class="data-table">
+        <thead>
+        <tr>
+            <th>身份名称</th>
+            <th>标识</th>
+            <th>持有人数</th>
+            <th class="actions-col">操作</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="item : ${identities}">
+            <td>
+                <form method="post" th:action="@{'/admin/identities/' + ${item.name()} + '/rename'}" class="rename-form">
+                    <input type="text" name="label" th:value="${item.label()}" required>
+                    <button type="submit" class="link-button">保存</button>
+                </form>
+            </td>
+            <td><code th:text="${item.name()}">doctor</code></td>
+            <td th:text="${item.holders()} + ' 人'">0 人</td>
+            <td class="actions-col">
+                <span class="org-meta" th:if="${item.systemManaged()}">平台使用，不可删除</span>
+                <form th:unless="${item.systemManaged()}"
+                      th:action="@{'/admin/identities/' + ${item.name()} + '/delete'}" method="post" class="inline-form">
+                    <button type="submit" class="link-button danger">删除</button>
+                </form>
+            </td>
+        </tr>
+        </tbody>
+    </table>
+
+    <section class="danger-zone">
+        <h2>新增通用身份</h2>
+        <p>标识用小写字母、数字和中划线，建档后不可更改；名称是管理员和业务系统看到的中文说法，随时可改。</p>
+        <form method="post" th:action="@{/admin/identities}" class="inline-reset">
+            <input type="text" name="label" placeholder="身份名称，如 药剂师" required>
+            <input type="text" name="name" placeholder="标识，如 pharmacist" required>
+            <button class="quiet-button" type="submit">新增</button>
+        </form>
+    </section>
+</main>
+</body>
+</html>

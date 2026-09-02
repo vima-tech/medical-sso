@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{admin/shell :: head('人员管理')}"></head>
+<body>
+<div th:replace="~{admin/shell :: nav('staff')}"></div>
+
+<main class="admin-main">
+    <div th:replace="~{admin/shell :: flash}"></div>
+
+    <section class="admin-heading">
+        <div>
+            <h1>人员管理</h1>
+            <p>新增和维护本医共体的人员账号、归属科室和可访问的业务系统。</p>
+        </div>
+        <span class="org-actions">
+            <a class="quiet-button" th:href="@{/admin/staff/import}">批量导入</a>
+            <a class="primary-button" th:href="@{/admin/staff/new}">新增人员</a>
+        </span>
+    </section>
+
+    <form class="searchbar" method="get" th:action="@{/admin/staff}">
+        <input type="text" name="keyword" th:value="${keyword}" placeholder="按姓名或登录名查找" autocomplete="off">
+        <button class="quiet-button" type="submit">查找</button>
+        <a class="quiet-button" th:href="@{/admin/staff}" th:if="${!#strings.isEmpty(keyword)}">清空</a>
+        <span class="result-count" th:text="'共 ' + ${total} + ' 人'">共 0 人</span>
+    </form>
+
+    <table class="data-table">
+        <thead>
+        <tr>
+            <th>姓名</th>
+            <th>工号</th>
+            <th>登录名</th>
+            <th>机构</th>
+            <th>科室</th>
+            <th>状态</th>
+            <th class="actions-col">操作</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="person : ${staff}">
+            <td th:text="${person.name() ?: '-'}">张三</td>
+            <td th:text="${person.employeeNo() ?: '-'}">10086</td>
+            <td><code th:text="${person.username()}">zhangsan</code></td>
+            <td th:text="${person.organizationName() ?: '-'}">第一人民医院</td>
+            <td>
+                <span th:text="${person.departmentName() ?: '-'}">内科</span>
+                <span class="tag" th:if="${!#lists.isEmpty(person.additionalDepartmentNames())}"
+                      th:text="'兼 ' + ${#strings.listJoin(person.additionalDepartmentNames(), '、')}">兼 检验科</span>
+            </td>
+            <td>
+                <span class="tag ok" th:if="${person.enabled()}">正常</span>
+                <span class="tag warn" th:unless="${person.enabled()}">已停用</span>
+            </td>
+            <td class="actions-col">
+                <a th:href="@{'/admin/staff/' + ${person.id()} + '/edit'}">编辑</a>
+                <form th:action="@{'/admin/staff/' + ${person.id()} + '/enabled'}" method="post" class="inline-form">
+                    <input type="hidden" name="enabled" th:value="${!person.enabled()}">
+                    <button type="submit" class="link-button"
+                            th:text="${person.enabled()} ? '停用' : '启用'">停用</button>
+                </form>
+            </td>
+        </tr>
+        </tbody>
+    </table>
+
+    <div class="empty-state" th:if="${#lists.isEmpty(staff)}">
+        <strong th:text="${#strings.isEmpty(keyword)} ? '还没有人员' : '没有匹配的人员'">还没有人员</strong>
+        <p>点击右上角「新增人员」开始建档。</p>
+    </div>
+
+    <div class="pager" th:if="${total > pageSize}">
+        <a class="quiet-button" th:if="${page > 0}"
+           th:href="@{/admin/staff(keyword=${keyword}, page=${page - 1})}">上一页</a>
+        <span th:text="'第 ' + (${page} + 1) + ' 页'">第 1 页</span>
+        <a class="quiet-button" th:if="${hasNext}"
+           th:href="@{/admin/staff(keyword=${keyword}, page=${page + 1})}">下一页</a>
+    </div>
+</main>
+</body>
+</html>

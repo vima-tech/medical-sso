@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>医共体统一应用门户</title>
+    <link rel="stylesheet" th:href="@{/css/portal.css}">
+</head>
+<body>
+<header class="topbar">
+    <a class="brand" th:href="@{/}">
+        <span class="brand-mark">+</span>
+        <span>
+            <strong>医共体统一应用门户</strong>
+            <small>Medical Union Workspace</small>
+        </span>
+    </a>
+    <div class="topbar-actions">
+        <a class="account-link" th:if="${subsystemAdmin}" th:href="@{/admin}">身份管理平台</a>
+        <a class="account-link" th:href="${accountUrl}">账户与安全</a>
+        <form th:action="@{/logout}" method="post">
+            <button class="quiet-button" type="submit">退出登录</button>
+        </form>
+    </div>
+</header>
+
+<main>
+    <section class="welcome">
+        <div>
+            <p class="eyebrow">统一身份认证</p>
+            <h1>你好，<span th:text="${medicalUser.name() ?: medicalUser.username()}">张三</span></h1>
+            <p class="welcome-copy">从这里进入你有权限使用的医共体业务系统。</p>
+        </div>
+        <dl class="identity-card">
+            <div class="identity-status">
+                <dt>登录状态</dt>
+                <dd>认证通过</dd>
+            </div>
+            <div>
+                <dt>工号</dt>
+                <dd th:text="${medicalUser.employeeNo() ?: '-'}">10086</dd>
+            </div>
+            <div>
+                <dt>机构</dt>
+                <dd th:text="${medicalUser.organizationCode() ?: '-'}">H001</dd>
+            </div>
+            <div>
+                <dt>科室</dt>
+                <dd th:text="${medicalUser.departmentCode() ?: '-'}">D001</dd>
+            </div>
+        </dl>
+    </section>
+
+    <section class="application-section">
+        <div class="section-heading">
+            <div>
+                <h2>我的应用</h2>
+                <p>这里只显示已授权给你的业务系统，由统一身份管理平台统一维护。</p>
+            </div>
+            <span class="application-count" th:text="${applications.size() + ' 个可用应用'}">2 个可用应用</span>
+        </div>
+
+        <div class="application-grid">
+            <a class="application-card" th:each="app : ${applications}" th:href="${app.url()}">
+                <span class="application-badge" th:text="${app.badge()}">DEMO</span>
+                <div>
+                    <h3 th:text="${app.name()}">应用名称</h3>
+                    <p th:if="${app.description()}" th:text="${app.description()}">应用说明</p>
+                </div>
+                <span class="application-action">打开</span>
+            </a>
+        </div>
+        <div class="empty-state" th:if="${applications.isEmpty()}">
+            <strong>当前没有可用业务系统</strong>
+            <p>请联系本机构管理员为当前账号分配系统访问权限。</p>
+        </div>
+    </section>
+</main>
+
+<footer>
+    <span>医共体统一身份认证平台</span>
+    <span>统一人员标识：<code th:text="${medicalUser.personId() ?: medicalUser.subject()}">P000123</code></span>
+</footer>
+</body>
+</html>

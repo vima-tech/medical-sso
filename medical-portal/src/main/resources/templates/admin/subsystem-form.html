@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{admin/shell :: head('登记子系统')}"></head>
+<body>
+<div th:replace="~{admin/shell :: nav('subsystems')}"></div>
+
+<main class="admin-main narrow">
+    <h1>登记子系统</h1>
+    <p class="hint">只需要四项。回调地址、退出返回地址、Web Origin 和 PKCE 全部自动配置。</p>
+
+    <form class="stack-form" th:action="@{/admin/subsystems}" th:object="${form}" method="post">
+        <label>
+            <span>系统名称</span>
+            <input type="text" th:field="*{name}" placeholder="住院医生工作站" autocomplete="off">
+            <em class="field-error" th:if="${#fields.hasErrors('name')}" th:errors="*{name}">错误</em>
+        </label>
+
+        <label>
+            <span>系统编码</span>
+            <input type="text" th:field="*{code}" placeholder="his-web" autocomplete="off">
+            <small>小写字母、数字和中划线，登记后不可更改。</small>
+            <em class="field-error" th:if="${#fields.hasErrors('code')}" th:errors="*{code}">错误</em>
+        </label>
+
+        <label>
+            <span>系统访问地址</span>
+            <input type="text" th:field="*{baseUrl}" placeholder="https://his.intra.example" autocomplete="off">
+            <small>浏览器访问该系统的地址，需与实际使用的域名和协议完全一致。</small>
+            <em class="field-error" th:if="${#fields.hasErrors('baseUrl')}" th:errors="*{baseUrl}">错误</em>
+        </label>
+
+        <fieldset class="stack-choice">
+            <legend>子系统技术栈</legend>
+            <label class="radio">
+                <input type="radio" th:field="*{stack}" value="boot2">
+                <span>Spring Boot 2.x / JDK 8</span>
+            </label>
+            <label class="radio">
+                <input type="radio" th:field="*{stack}" value="boot3">
+                <span>Spring Boot 3.x / JDK 17+</span>
+            </label>
+            <em class="field-error" th:if="${#fields.hasErrors('stack')}" th:errors="*{stack}">错误</em>
+        </fieldset>
+
+        <div class="form-actions">
+            <a class="quiet-button" th:href="@{/admin/subsystems}">取消</a>
+            <button class="primary-button" type="submit">登记并生成对接文档</button>
+        </div>
+    </form>
+</main>
+</body>
+</html>

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<!-- 管理台统一外壳：顶栏 + 模块导航 -->
+<th:block th:fragment="head(title)">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title th:text="${title} + ' · 统一身份管理平台'">统一身份管理平台</title>
+    <link rel="stylesheet" th:href="@{/css/portal.css}">
+    <link rel="stylesheet" th:href="@{/css/admin.css}">
+</th:block>
+
+<th:block th:fragment="nav(active)">
+    <header class="admin-topbar">
+        <a class="brand" th:href="@{/admin/staff}">
+            <span class="brand-mark">+</span>
+            <span>
+                <strong>统一身份管理平台</strong>
+                <small>医共体</small>
+            </span>
+        </a>
+        <nav class="admin-nav">
+            <a th:href="@{/admin/organizations}" th:classappend="${active == 'organizations'} ? 'current' : ''">机构与科室</a>
+            <a th:href="@{/admin/staff}" th:classappend="${active == 'staff'} ? 'current' : ''">人员管理</a>
+            <a th:href="@{/admin/authorizations}" th:classappend="${active == 'authorizations'} ? 'current' : ''">授权中心</a>
+            <a th:href="@{/admin/subsystems}" th:classappend="${active == 'subsystems'} ? 'current' : ''">业务系统</a>
+            <a th:href="@{/admin/identities}" th:classappend="${active == 'identities'} ? 'current' : ''">通用身份</a>
+            <a th:href="@{/admin/audit}" th:classappend="${active == 'audit'} ? 'current' : ''">审计记录</a>
+        </nav>
+        <div class="admin-topbar-actions">
+            <a class="account-link" th:href="@{/apps}">应用门户</a>
+            <form th:action="@{/logout}" method="post">
+                <button class="quiet-button" type="submit">退出</button>
+            </form>
+        </div>
+    </header>
+</th:block>
+
+<th:block th:fragment="flash">
+    <div class="flash ok" th:if="${notice}" th:text="${notice}">操作成功</div>
+    <div class="flash bad" th:if="${error}" th:text="${error}">操作失败</div>
+</th:block>
+
+</body>
+</html>

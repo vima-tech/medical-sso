@@ -1,0 +1,34 @@
+# 显式给出各端点，避免测试启动时去连真实 Keycloak 拉取 issuer 元数据
+spring:
+  security:
+    oauth2:
+      client:
+        registration:
+          medical-sso:
+            provider: medical-sso
+            client-id: medical-portal
+            client-secret: test-secret
+            authorization-grant-type: authorization_code
+            scope: openid,profile
+            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+        provider:
+          medical-sso:
+            authorization-uri: http://sso.test/realms/medical/protocol/openid-connect/auth
+            token-uri: http://sso.test/realms/medical/protocol/openid-connect/token
+            user-info-uri: http://sso.test/realms/medical/protocol/openid-connect/userinfo
+            jwk-set-uri: http://sso.test/realms/medical/protocol/openid-connect/certs
+            user-name-attribute: preferred_username
+
+medical:
+  sso:
+    client-id: medical-portal
+
+portal:
+  account-url: http://sso.test/realms/medical/account
+  applications:
+    demo-url: http://localhost:8082/
+    demo-boot2-url: http://localhost:8083/
+  admin:
+    issuer-uri: http://sso.test/realms/medical
+    client-id: medical-portal-admin
+    client-secret: test-admin-secret

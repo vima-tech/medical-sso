@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{admin/shell :: head('机构与科室')}"></head>
+<body>
+<div th:replace="~{admin/shell :: nav('organizations')}"></div>
+
+<main class="admin-main">
+    <div th:replace="~{admin/shell :: flash}"></div>
+
+    <section class="admin-heading">
+        <div>
+            <h1>机构与科室</h1>
+            <p>维护本医共体的成员机构和科室。人员建档时的机构、科室下拉就来自这里。</p>
+        </div>
+        <a class="primary-button" th:href="@{/admin/organizations/new}">新增机构</a>
+    </section>
+
+    <div class="org-tree">
+        <article class="org-card" th:each="org : ${organizations}">
+            <header class="org-head">
+                <div>
+                    <h2 th:text="${org.name()}">第一人民医院</h2>
+                    <p>
+                        <span class="tag" th:text="${org.code()}">H001</span>
+                        <span class="org-meta" th:text="'直属人员 ' + ${org.memberCount()} + ' 人 · 科室 ' + ${#lists.size(org.departments())} + ' 个'">
+                            直属人员 0 人
+                        </span>
+                    </p>
+                </div>
+                <div class="org-actions">
+                    <a th:href="@{/admin/organizations/new(parentId=${org.id()})}">新增科室</a>
+                    <a th:href="@{'/admin/organizations/' + ${org.id()} + '/edit'}">编辑</a>
+                    <form th:action="@{'/admin/organizations/' + ${org.id()} + '/delete'}" method="post" class="inline-form">
+                        <button type="submit" class="link-button danger">删除</button>
+                    </form>
+                </div>
+            </header>
+
+            <ul class="dept-list" th:if="${!#lists.isEmpty(org.departments())}">
+                <li th:each="dept : ${org.departments()}">
+                    <span class="dept-name" th:text="${dept.name()}">内科</span>
+                    <span class="tag" th:text="${dept.code()}">D001</span>
+                    <span class="org-meta" th:text="${dept.memberCount()} + ' 人'">0 人</span>
+                    <span class="dept-actions">
+                        <a th:href="@{'/admin/organizations/' + ${dept.id()} + '/edit'}">编辑</a>
+                        <form th:action="@{'/admin/organizations/' + ${dept.id()} + '/delete'}" method="post" class="inline-form">
+                            <button type="submit" class="link-button danger">删除</button>
+                        </form>
+                    </span>
+                </li>
+            </ul>
+            <p class="dept-empty" th:if="${#lists.isEmpty(org.departments())}">该机构下还没有科室。</p>
+        </article>
+    </div>
+
+    <div class="empty-state" th:if="${#lists.isEmpty(organizations)}">
+        <strong>还没有机构</strong>
+        <p>先新增机构，再在机构下新增科室，之后才能给人员建档。</p>
+    </div>
+</main>
+</body>
+</html>

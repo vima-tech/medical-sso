@@ -1,0 +1,16 @@
+# 构建产物
+target/
+**/target/
+.m2/
+
+# 本地环境与密钥，不入库
+.env
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# 临时文件
+*.log
+*.bak

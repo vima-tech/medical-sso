@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>JDK 8 子系统接入示例</title>
+    <link rel="stylesheet" th:href="@{/css/demo.css}">
+</head>
+<body>
+<header class="topbar">
+    <div>
+        <strong>JDK 8 子系统接入示例</strong>
+        <small>Spring Boot 2.7 · Java 8</small>
+    </div>
+    <form th:action="@{/logout}" method="post">
+        <button class="quiet-button" type="submit">退出登录</button>
+    </form>
+</header>
+
+<main>
+    <h1>你好，<span th:text="${medicalUser.name() ?: medicalUser.username()}">张三</span></h1>
+    <p class="hint">下面的字段全部来自统一认证下发的 Token，未经过本系统改写。</p>
+
+    <dl class="identity">
+        <div><dt>统一人员标识</dt><dd th:text="${medicalUser.personId() ?: '-'}">P000123</dd></div>
+        <div><dt>工号</dt><dd th:text="${medicalUser.employeeNo() ?: '-'}">10086</dd></div>
+        <div><dt>登录名</dt><dd th:text="${medicalUser.username() ?: '-'}">zhangsan</dd></div>
+        <div><dt>机构</dt><dd th:text="${medicalUser.organizationCode() ?: '-'}">H001</dd></div>
+        <div><dt>科室</dt><dd th:text="${medicalUser.departmentCode() ?: '-'}">D001</dd></div>
+    </dl>
+
+    <section>
+        <h2>通用角色</h2>
+        <ul>
+            <li th:each="role : ${medicalUser.realmRoles()}" th:text="${role}">doctor</li>
+        </ul>
+    </section>
+
+    <section>
+        <h2>本系统角色</h2>
+        <ul>
+            <li th:each="role : ${medicalUser.clientRoles()}" th:text="${role}">access</li>
+        </ul>
+    </section>
+
+    <p class="hint">接口形式见 <a th:href="@{/api/me}">/api/me</a>。</p>
+</main>
+</body>
+</html>

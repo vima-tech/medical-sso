@@ -1,0 +1,39 @@
+server:
+  port: ${PORTAL_PORT:18082}
+  forward-headers-strategy: framework
+
+spring:
+  application:
+    name: medical-portal
+  security:
+    oauth2:
+      client:
+        registration:
+          medical-sso:
+            provider: medical-sso
+            client-id: medical-portal
+            client-secret: ${SSO_PORTAL_CLIENT_SECRET:portal-dev-secret}
+            client-name: 医共体统一身份认证
+            authorization-grant-type: authorization_code
+            scope: openid,profile
+        provider:
+          medical-sso:
+            issuer-uri: ${SSO_ISSUER:http://localhost:18081/auth/realms/medical}
+
+medical:
+  sso:
+    client-id: medical-portal
+
+portal:
+  account-url: ${SSO_ACCOUNT_URL:http://localhost:18081/auth/realms/medical/account}
+  admin:
+    enabled: ${PORTAL_ADMIN_ENABLED:true}
+    issuer-uri: ${SSO_ISSUER:http://localhost:18081/auth/realms/medical}
+    client-id: ${SSO_ADMIN_CLIENT_ID:medical-portal-admin}
+    client-secret: ${SSO_ADMIN_CLIENT_SECRET:portal-admin-dev-secret}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health

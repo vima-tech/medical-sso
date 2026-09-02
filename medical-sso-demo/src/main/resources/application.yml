@@ -1,0 +1,31 @@
+server:
+  port: 8082
+  forward-headers-strategy: framework
+
+spring:
+  application:
+    name: medical-sso-demo
+  security:
+    oauth2:
+      client:
+        registration:
+          medical-sso:
+            provider: medical-sso
+            client-id: medical-demo
+            client-secret: ${SSO_DEMO_CLIENT_SECRET:demo-dev-secret}
+            client-name: 医共体统一身份认证
+            authorization-grant-type: authorization_code
+            scope: openid,profile
+        provider:
+          medical-sso:
+            issuer-uri: ${SSO_ISSUER:http://localhost:18081/auth/realms/medical}
+
+medical:
+  sso:
+    client-id: medical-demo
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health

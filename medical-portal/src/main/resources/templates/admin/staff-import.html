@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{admin/shell :: head('批量导入人员')}"></head>
+<body>
+<div th:replace="~{admin/shell :: nav('staff')}"></div>
+
+<main class="admin-main narrow">
+    <div th:replace="~{admin/shell :: flash}"></div>
+
+    <section class="admin-heading">
+        <div>
+            <h1>批量导入人员</h1>
+            <p>适合新机构接入时一次性建档。逐行导入，一行填错不影响其他行。</p>
+        </div>
+        <a class="quiet-button" th:href="@{/admin/staff}">返回人员管理</a>
+    </section>
+
+    <form class="stack-form" method="post" enctype="multipart/form-data" th:action="@{/admin/staff/import}">
+        <div class="form-error" th:if="${error}"><p th:text="${error}">错误</p></div>
+
+        <label>
+            <span>第一步：下载模板</span>
+            <span class="template-row">
+                <a class="quiet-button" th:href="@{/admin/staff/import/template}">下载 CSV 模板</a>
+                <small>用 Excel 或 WPS 打开填写，填完另存为 CSV（逗号分隔）。</small>
+            </span>
+        </label>
+
+        <label>
+            <span>列说明</span>
+            <small>
+                共 <span th:text="${#lists.size(headers)}">7</span> 列，顺序为：
+                <b th:text="${#strings.listJoin(headers, ' / ')}">姓名 / 工号</b>。
+                机构编码和科室编码必须是「机构与科室」里已有的编码，且科室要属于该机构。
+                工号和统一人员标识全局唯一，与已有人员重复的行会被跳过并说明原因。
+            </small>
+        </label>
+
+        <label>
+            <span>第二步：选择填好的文件</span>
+            <input type="file" name="file" accept=".csv,text/csv" required>
+        </label>
+
+        <label class="checkbox standalone">
+            <input type="checkbox" name="mustChangePassword" value="true" checked>
+            <span>要求这批人员首次登录时修改密码</span>
+        </label>
+
+        <div class="form-actions">
+            <button class="primary-button" type="submit">开始导入</button>
+        </div>
+    </form>
+
+    <section class="danger-zone" th:if="${result}">
+        <h2>导入结果</h2>
+        <p>
+            成功 <b th:text="${result.succeeded()}">0</b> 行，
+            失败 <b th:text="${result.failed()}">0</b> 行。
+            <span th:if="${result.hasFailures()}">修正失败行后可以再导一次，已成功的行会因为查重被自动跳过。</span>
+        </p>
+        <table class="data-table">
+            <thead>
+            <tr><th>行号</th><th>姓名</th><th>结果</th></tr>
+            </thead>
+            <tbody>
+            <tr th:each="row : ${result.rows()}">
+                <td th:text="${row.lineNumber()}">2</td>
+                <td th:text="${row.name() ?: '-'}">张三</td>
+                <td>
+                    <span class="tag ok" th:if="${row.ok()}" th:text="${row.message()}">已导入</span>
+                    <span class="tag warn" th:unless="${row.ok()}" th:text="${row.message()}">失败原因</span>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </section>
+</main>
+</body>
+</html>

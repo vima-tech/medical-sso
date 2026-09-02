@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Spring Boot SSO 接入示例</title>
+    <link rel="stylesheet" th:href="@{/css/demo.css}">
+</head>
+<body>
+<main>
+    <nav>
+        <a href="http://localhost:18081/">← 返回统一门户</a>
+        <form th:action="@{/logout}" method="post">
+            <button type="submit">退出</button>
+        </form>
+    </nav>
+
+    <header>
+        <p class="eyebrow">Spring Boot OIDC Demo</p>
+        <h1>接入成功</h1>
+        <p>当前系统没有实现自己的 RBAC，只要求用户拥有 <code>medical-demo/access</code>。</p>
+    </header>
+
+    <section class="panel">
+        <div class="panel-heading">
+            <h2>统一用户对象</h2>
+            <a th:href="@{/api/me}">查看 JSON 接口</a>
+        </div>
+        <dl>
+            <div><dt>统一人员 ID</dt><dd th:text="${medicalUser.personId() ?: '-'}">P000123</dd></div>
+            <div><dt>Keycloak Subject</dt><dd th:text="${medicalUser.subject()}">subject</dd></div>
+            <div><dt>工号</dt><dd th:text="${medicalUser.employeeNo() ?: '-'}">10086</dd></div>
+            <div><dt>姓名</dt><dd th:text="${medicalUser.name() ?: '-'}">张三</dd></div>
+            <div><dt>机构编码</dt><dd th:text="${medicalUser.organizationCode() ?: '-'}">H001</dd></div>
+            <div><dt>科室编码</dt><dd th:text="${medicalUser.departmentCode() ?: '-'}">D001</dd></div>
+        </dl>
+    </section>
+
+    <section class="role-grid">
+        <article>
+            <span>Realm Roles</span>
+            <h2>医共体通用角色</h2>
+            <ul>
+                <li th:each="role : ${medicalUser.realmRoles()}" th:text="${role}">doctor</li>
+            </ul>
+        </article>
+        <article>
+            <span>Client Roles</span>
+            <h2>当前系统角色</h2>
+            <ul>
+                <li th:each="role : ${medicalUser.clientRoles()}" th:text="${role}">access</li>
+            </ul>
+        </article>
+    </section>
+</main>
+</body>
+</html>

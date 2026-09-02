@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{admin/shell :: head('业务系统')}"></head>
+<body>
+<div th:replace="~{admin/shell :: nav('subsystems')}"></div>
+
+<main class="admin-main narrow">
+    <div th:replace="~{admin/shell :: flash}"></div>
+
+    <section class="admin-heading">
+        <div>
+            <h1 th:text="${subsystem.name()}">住院系统</h1>
+            <p>
+                <code th:text="${subsystem.clientId()}">his-web</code>
+                <span class="tag ok" th:if="${subsystem.enabled()}">启用中</span>
+                <span class="tag warn" th:unless="${subsystem.enabled()}">已停用</span>
+            </p>
+        </div>
+        <div class="org-actions">
+            <a th:href="@{'/admin/subsystems/' + ${subsystem.clientId()} + '/guide'}">对接文档</a>
+            <a class="quiet-button" th:href="@{/admin/subsystems}">返回列表</a>
+        </div>
+    </section>
+
+    <form class="stack-form" method="post" th:action="@{'/admin/subsystems/' + ${subsystem.clientId()}}" th:object="${form}">
+        <div class="form-error" th:if="${#fields.hasGlobalErrors()}">
+            <p th:each="err : ${#fields.globalErrors()}" th:text="${err}">错误</p>
+        </div>
+
+        <div class="form-row">
+            <label>
+                <span>系统名称</span>
+                <input type="text" th:field="*{name}" autocomplete="off">
+                <em class="field-error" th:if="${#fields.hasErrors('name')}" th:errors="*{name}">错误</em>
+            </label>
+            <label>
+                <span>系统编码</span>
+                <input type="text" th:field="*{code}" readonly>
+                <small>登记后不可更改，业务系统的配置按它识别。</small>
+            </label>
+        </div>
+
+        <label>
+            <span>系统访问地址</span>
+            <input type="text" th:field="*{baseUrl}" autocomplete="off">
+            <small>改动后回调地址会同步更新为
+                <code th:text="${form.baseUrl} + '/login/oauth2/code/medical-sso'">回调地址</code>，
+                该系统的配置需一并更新。</small>
+            <em class="field-error" th:if="${#fields.hasErrors('baseUrl')}" th:errors="*{baseUrl}">错误</em>
+        </label>
+
+        <fieldset class="choice-group">
+            <legend>子系统技术栈</legend>
+            <p class="group-hint">决定对接文档给出哪一套代码。</p>
+            <label class="checkbox"><input type="radio" th:field="*{stack}" value="boot2"><span>Spring Boot 2.x / JDK 8</span></label>
+            <label class="checkbox"><input type="radio" th:field="*{stack}" value="boot3"><span>Spring Boot 3.x / JDK 17+</span></label>
+        </fieldset>
+
+        <div class="form-actions">
+            <button class="primary-button" type="submit">保存</button>
+        </div>
+    </form>
+
+    <section class="danger-zone">
+        <h2>系统角色</h2>
+        <p>除了「能否进入」之外，业务系统可以在这里登记自己的粗粒度角色，随 Token 下发供其内部判断。
+            <code>access</code> 由平台使用，不能删除。</p>
+        <ul class="role-list">
+            <li>
+                <code>access</code>
+                <span class="org-meta">能否进入本系统，由平台维护</span>
+            </li>
+            <li th:each="role : ${subsystem.businessRoles()}">
+                <code th:text="${role}">outpatient-doctor</code>
+                <form th:action="@{'/admin/subsystems/' + ${subsystem.clientId()} + '/roles/' + ${role} + '/delete'}"
+                      method="post" class="inline-form">
+                    <button type="submit" class="link-button danger">删除</button>
+                </form>
+            </li>
+        </ul>
+        <form method="post" th:action="@{'/admin/subsystems/' + ${subsystem.clientId()} + '/roles'}" class="inline-reset">
+            <input type="text" name="roleName" placeholder="角色标识，如 outpatient-doctor" required>
+            <input type="text" name="description" placeholder="说明（可选）">
+            <button class="quiet-button" type="submit">新增角色</button>
+        </form>
+    </section>
+
+    <section class="danger-zone">
+        <h2>Client Secret</h2>
+        <p>重新生成后旧 Secret 立即失效，该业务系统必须同步更新配置，否则会登录失败。仅在泄露或遗失时使用。</p>
+        <form method="post" th:action="@{'/admin/subsystems/' + ${subsystem.clientId()} + '/secret'}">
+            <button class="quiet-button" type="submit">重新生成 Secret</button>
+        </form>
+    </section>
+
+    <section class="danger-zone">
+        <h2>停用与删除</h2>
+        <p>停用后该系统立即无法登录，配置保留，可随时恢复。删除会一并移除它的角色，且要求先在授权中心收回全部人员权限。</p>
+        <div class="inline-reset">
+            <form method="post" th:action="@{'/admin/subsystems/' + ${subsystem.clientId()} + '/enabled'}" class="inline-form">
+                <input type="hidden" name="enabled" th:value="${!subsystem.enabled()}">
+                <button class="quiet-button" type="submit" th:text="${subsystem.enabled()} ? '停用该系统' : '启用该系统'">停用该系统</button>
+            </form>
+            <form method="post" th:action="@{'/admin/subsystems/' + ${subsystem.clientId()} + '/delete'}" class="inline-form">
+                <button class="link-button danger" type="submit">删除该系统</button>
+            </form>
+        </div>
+    </section>
+</main>
+</body>
+</html>

@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{admin/shell :: head(${form.isDepartment()} ? '科室' : '机构')}"></head>
+<body>
+<div th:replace="~{admin/shell :: nav('organizations')}"></div>
+
+<main class="admin-main narrow">
+    <div th:replace="~{admin/shell :: flash}"></div>
+
+    <section class="admin-heading">
+        <div>
+            <h1 th:text="(${form.isNew()} ? '新增' : '编辑') + (${form.isDepartment()} ? '科室' : '机构')">新增机构</h1>
+            <p th:if="${parentName}" th:text="'所属机构：' + ${parentName}">所属机构</p>
+            <p th:unless="${parentName}">编码会写进人员的身份信息并下发给各业务系统，建档后不建议更改。</p>
+        </div>
+        <a class="quiet-button" th:href="@{/admin/organizations}">返回</a>
+    </section>
+
+    <form class="stack-form" method="post" th:action="@{/admin/organizations}" th:object="${form}">
+        <input type="hidden" th:field="*{id}">
+        <input type="hidden" th:field="*{parentId}">
+
+        <div class="form-error" th:if="${#fields.hasGlobalErrors()}">
+            <p th:each="err : ${#fields.globalErrors()}" th:text="${err}">错误</p>
+        </div>
+
+        <div class="form-row">
+            <label>
+                <span th:text="${form.isDepartment()} ? '科室名称' : '机构名称'">名称</span>
+                <input type="text" th:field="*{name}" autocomplete="off"
+                       th:placeholder="${form.isDepartment()} ? '内科' : '第一人民医院'">
+                <em class="field-error" th:if="${#fields.hasErrors('name')}" th:errors="*{name}">错误</em>
+            </label>
+            <label>
+                <span th:text="${form.isDepartment()} ? '科室编码' : '机构编码'">编码</span>
+                <input type="text" th:field="*{code}" autocomplete="off"
+                       th:placeholder="${form.isDepartment()} ? 'D001' : 'H001'">
+                <small>全局唯一，业务系统按它识别归属。</small>
+                <em class="field-error" th:if="${#fields.hasErrors('code')}" th:errors="*{code}">错误</em>
+            </label>
+        </div>
+
+        <div class="form-actions">
+            <a class="quiet-button" th:href="@{/admin/organizations}">取消</a>
+            <button class="primary-button" type="submit">保存</button>
+        </div>
+    </form>
+</main>
+</body>
+</html>

@@ -1,0 +1,269 @@
+/* 医共体统一身份认证登录页。整套 HTML 由本主题的模板提供，不依赖 Keycloak 自带样式。 */
+
+:root {
+  color-scheme: light;
+  --ink: #16322d;
+  --muted: #61736d;
+  --primary: #087568;
+  --primary-strong: #055b51;
+  --primary-soft: #e2f2ee;
+  --line: #d6e4df;
+  --surface: #ffffff;
+  --background: #f1f6f4;
+  --danger: #a8341f;
+  --danger-soft: #fdece9;
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body.page {
+  margin: 0;
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2.5rem 1.25rem;
+  background:
+    linear-gradient(rgba(8, 117, 104, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(8, 117, 104, 0.03) 1px, transparent 1px),
+    linear-gradient(150deg, #eaf4f1 0%, #f7fbfa 55%, #e6f1ee 100%);
+  background-size: 34px 34px, 34px 34px, auto;
+  color: var(--ink);
+  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.shell {
+  width: 100%;
+  max-width: 25rem;      /* 卡片宽度锁死，不再随视口撑满 */
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* 品牌区 */
+
+.brand { text-align: center; }
+
+.brand-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  margin-bottom: 0.85rem;
+  border-radius: 0.9rem;
+  background: var(--primary);
+  color: #fff;
+  font-size: 1.6rem;
+  font-weight: 300;
+  line-height: 1;
+  box-shadow: 0 0.5rem 1.5rem rgba(8, 117, 104, 0.25);
+}
+
+.brand-name {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+}
+
+.brand-sub {
+  margin: 0.4rem 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  letter-spacing: 0.02em;
+}
+
+/* 卡片 */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  padding: 1.75rem;
+  box-shadow: 0 1.25rem 2.5rem rgba(22, 50, 45, 0.06);
+}
+
+.card-title {
+  margin: 0 0 1.25rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+/* 提示 */
+
+.alert {
+  border-radius: 0.6rem;
+  padding: 0.7rem 0.9rem;
+  margin-bottom: 1.1rem;
+  font-size: 0.86rem;
+  line-height: 1.6;
+}
+
+.alert-error { background: var(--danger-soft); color: var(--danger); }
+.alert-warning { background: #fdf5e6; color: #8a5a00; }
+.alert-success,
+.alert-info { background: var(--primary-soft); color: var(--primary-strong); }
+
+.current-user {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  background: var(--background);
+  border-radius: 0.6rem;
+  padding: 0.6rem 0.85rem;
+  margin-bottom: 1.1rem;
+  font-size: 0.86rem;
+}
+
+.current-user a { color: var(--primary); font-weight: 700; text-decoration: none; }
+
+/* 表单 */
+
+.field { margin-bottom: 1rem; }
+
+.field label {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.field input[type="text"],
+.field input[type="password"] {
+  width: 100%;
+  height: 2.75rem;
+  padding: 0 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  background: #fff;
+  color: var(--ink);
+  font-size: 0.95rem;
+  font-family: inherit;
+}
+
+.field input::placeholder { color: #a9b8b3; }
+
+.field input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(8, 117, 104, 0.12);
+}
+
+.field input[aria-invalid="true"] { border-color: var(--danger); }
+
+/* 浏览器自动填充会用自己的底色盖掉输入框，这里压回白底 */
+.field input:-webkit-autofill,
+.field input:-webkit-autofill:hover,
+.field input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--ink);
+  -webkit-box-shadow: 0 0 0 100vmax #fff inset;
+  box-shadow: 0 0 0 100vmax #fff inset;
+  caret-color: var(--ink);
+  transition: background-color 9999s ease-in-out 0s;
+}
+
+/* 密码框与显示按钮 */
+
+.password-box { position: relative; }
+.password-box input { padding-right: 3.75rem; }
+
+.peek {
+  position: absolute;
+  top: 50%;
+  right: 0.4rem;
+  transform: translateY(-50%);
+  border: none;
+  background: none;
+  padding: 0.35rem 0.5rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-family: inherit;
+  cursor: pointer;
+  border-radius: 0.4rem;
+}
+
+.peek:hover { color: var(--primary); background: var(--primary-soft); }
+
+.field-error {
+  margin: -0.4rem 0 0.9rem;
+  color: var(--danger);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.remember {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1.1rem;
+  font-size: 0.86rem;
+  color: var(--muted);
+}
+
+.submit {
+  width: 100%;
+  height: 2.85rem;
+  border: none;
+  border-radius: 0.6rem;
+  background: var(--primary);
+  color: #fff;
+  font-size: 0.98rem;
+  font-weight: 700;
+  font-family: inherit;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.submit:hover { background: var(--primary-strong); }
+.submit:active { transform: translateY(1px); }
+
+.secondary-button {
+  width: 100%;
+  height: 2.6rem;
+  margin-top: 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  background: #fff;
+  color: var(--ink);
+  font-size: 0.9rem;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.secondary-link {
+  display: block;
+  margin-top: 0.9rem;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.84rem;
+  text-decoration: none;
+}
+
+.secondary-link:hover { color: var(--primary); }
+
+.help,
+.card-info {
+  margin: 1.1rem 0 0;
+  padding-top: 1.1rem;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.7;
+}
+
+/* 页脚 */
+
+.foot {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+}
+
+@media (max-width: 420px) {
+  .card { padding: 1.35rem; }
+}

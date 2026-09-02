@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{admin/shell :: head(${form.isNew()} ? '新增人员' : '编辑人员')}"></head>
+<body>
+<div th:replace="~{admin/shell :: nav('staff')}"></div>
+
+<main class="admin-main narrow">
+    <div th:replace="~{admin/shell :: flash}"></div>
+
+    <section class="admin-heading">
+        <div>
+            <h1 th:text="${form.isNew()} ? '新增人员' : '编辑人员'">新增人员</h1>
+            <p>这里填的机构、科室和工号会直接下发给各业务系统，请与人事档案保持一致。</p>
+        </div>
+        <a class="quiet-button" th:href="@{/admin/staff}">返回列表</a>
+    </section>
+
+    <form class="stack-form" method="post" th:action="@{/admin/staff}" th:object="${form}">
+        <input type="hidden" th:field="*{id}">
+
+        <div class="form-error" th:if="${#fields.hasGlobalErrors()}">
+            <p th:each="err : ${#fields.globalErrors()}" th:text="${err}">错误</p>
+        </div>
+
+        <div class="form-row">
+            <label>
+                <span>姓名</span>
+                <input type="text" th:field="*{name}" placeholder="张三" autocomplete="off">
+                <small>中文全名，姓在前。它就是各业务系统显示的姓名。</small>
+                <em class="field-error" th:if="${#fields.hasErrors('name')}" th:errors="*{name}">错误</em>
+            </label>
+            <label>
+                <span>工号</span>
+                <input type="text" th:field="*{employeeNo}" placeholder="10086" autocomplete="off">
+                <em class="field-error" th:if="${#fields.hasErrors('employeeNo')}" th:errors="*{employeeNo}">错误</em>
+            </label>
+        </div>
+
+        <div class="form-row">
+            <label>
+                <span>登录名</span>
+                <input type="text" th:field="*{username}" placeholder="zhangsan" autocomplete="off"
+                       th:readonly="${!form.isNew()}">
+                <small th:if="${form.isNew()}">建档后不可修改，建议用工号或拼音。</small>
+                <small th:unless="${form.isNew()}">登录名建档后不可修改。</small>
+                <em class="field-error" th:if="${#fields.hasErrors('username')}" th:errors="*{username}">错误</em>
+            </label>
+            <label>
+                <span>统一人员标识</span>
+                <input type="text" th:field="*{personId}" placeholder="P000123" autocomplete="off">
+                <small>跨系统关联本人的唯一标识，一经使用不得更改或复用。</small>
+                <em class="field-error" th:if="${#fields.hasErrors('personId')}" th:errors="*{personId}">错误</em>
+            </label>
+        </div>
+
+        <div class="form-row">
+            <label>
+                <span>所属机构</span>
+                <select th:field="*{organizationCode}" id="organizationCode">
+                    <option value="">请选择</option>
+                    <option th:each="org : ${organizations}" th:value="${org.code()}" th:text="${org.name()}">机构</option>
+                </select>
+                <em class="field-error" th:if="${#fields.hasErrors('organizationCode')}" th:errors="*{organizationCode}">错误</em>
+            </label>
+            <label>
+                <span>所属科室</span>
+                <select th:field="*{departmentCode}" id="departmentCode">
+                    <option value="">请先选择机构</option>
+                    <th:block th:each="org : ${organizations}">
+                        <option th:each="dept : ${org.departments()}"
+                                th:value="${dept.code()}"
+                                th:text="${dept.name()}"
+                                th:attr="data-org=${org.code()}">科室</option>
+                    </th:block>
+                </select>
+                <em class="field-error" th:if="${#fields.hasErrors('departmentCode')}" th:errors="*{departmentCode}">错误</em>
+            </label>
+        </div>
+
+        <fieldset class="choice-group">
+            <legend>兼职科室</legend>
+            <p class="group-hint">除主职科室外还在哪些科室任职，可跨机构。主职仍以上面填的机构科室为准，
+                业务系统按主职判断归属；需要完整任职信息的系统可以取全部任职科室。</p>
+            <th:block th:each="org : ${organizations}">
+                <label class="checkbox" th:each="dept : ${org.departments()}"
+                       th:if="${dept.code() != form.departmentCode}">
+                    <input type="checkbox" th:field="*{additionalDepartmentCodes}" th:value="${dept.code()}">
+                    <span th:text="${org.name()} + ' · ' + ${dept.name()}">第一人民医院 · 内科</span>
+                </label>
+            </th:block>
+        </fieldset>
+
+        <fieldset class="choice-group">
+            <legend>通用身份</legend>
+            <p class="group-hint">跨系统通用的身份，例如医生、护士。业务系统据此判断岗位。</p>
+            <label class="checkbox" th:each="role : ${generalRoles}">
+                <input type="checkbox" th:field="*{generalRoles}" th:value="${role.name()}">
+                <span th:text="${role.label()}">医生</span>
+            </label>
+        </fieldset>
+
+        <fieldset class="choice-group">
+            <legend>可访问的业务系统</legend>
+            <p class="group-hint">勾选后本人才能进入对应系统。系统内部的菜单和数据权限仍由各系统自己管理。</p>
+            <label class="checkbox" th:each="system : ${systems}">
+                <input type="checkbox" th:field="*{accessibleSystems}" th:value="${system.clientId()}">
+                <span th:text="${system.name()}">住院系统</span>
+            </label>
+            <p class="group-hint" th:if="${#lists.isEmpty(systems)}">还没有已登记的业务系统。</p>
+        </fieldset>
+
+        <div th:if="${form.isNew()}" class="form-row">
+            <label>
+                <span>初始密码</span>
+                <input type="text" th:field="*{initialPassword}" autocomplete="off">
+                <small>当面或通过安全渠道交给本人，不要用微信或短信发送。</small>
+                <em class="field-error" th:if="${#fields.hasErrors('initialPassword')}" th:errors="*{initialPassword}">错误</em>
+            </label>
+            <label class="checkbox standalone">
+                <input type="checkbox" th:field="*{mustChangePassword}">
+                <span>要求本人首次登录时修改密码</span>
+            </label>
+        </div>
+
+        <label class="checkbox standalone">
+            <input type="checkbox" th:field="*{enabled}">
+            <span>账号可用（取消勾选相当于停用）</span>
+        </label>
+
+        <div class="form-actions">
+            <a class="quiet-button" th:href="@{/admin/staff}">取消</a>
+            <button class="primary-button" type="submit">保存</button>
+        </div>
+    </form>
+
+    <section class="danger-zone" th:if="${!form.isNew() and sessions != null}">
+        <h2>在线登录</h2>
+        <p th:if="${#lists.isEmpty(sessions)}">该人员当前没有在线登录。</p>
+        <table class="data-table" th:unless="${#lists.isEmpty(sessions)}">
+            <thead>
+            <tr><th>登录时间</th><th>最后活动</th><th>来源 IP</th><th>已进入的系统</th></tr>
+            </thead>
+            <tbody>
+            <tr th:each="s : ${sessions}">
+                <td th:text="${s.startedAt()}">2026-09-02 10:00:00</td>
+                <td th:text="${s.lastAccessAt()}">2026-09-02 10:20:00</td>
+                <td th:text="${s.ip()}">10.0.0.1</td>
+                <td th:text="${#strings.listJoin(s.systems(), '、')}">住院系统</td>
+            </tr>
+            </tbody>
+        </table>
+        <form method="post" th:action="@{'/admin/staff/' + ${form.id} + '/logout'}" class="inline-reset"
+              th:unless="${#lists.isEmpty(sessions)}">
+            <button class="quiet-button" type="submit">强制在所有设备下线</button>
+            <small>用于离职或账号外泄。已建立的业务系统本地会话不受影响，需各系统自行处理。</small>
+        </form>
+    </section>
+
+    <section class="danger-zone" th:unless="${form.isNew()}">
+        <h2>重置密码</h2>
+        <p>用于本人忘记密码。重置后请当面或通过安全渠道告知，不要用微信或短信发送。</p>
+        <form method="post" th:action="@{'/admin/staff/' + ${form.id} + '/password'}" class="inline-reset">
+            <input type="text" name="password" placeholder="新密码" autocomplete="off" required>
+            <label class="checkbox">
+                <input type="checkbox" name="mustChange" value="true" checked>
+                <span>要求下次登录修改</span>
+            </label>
+            <button class="quiet-button" type="submit">重置密码</button>
+        </form>
+    </section>
+</main>
+
+<script>
+    // 科室随机构联动：只显示当前机构下的科室
+    (function () {
+        var org = document.getElementById('organizationCode');
+        var dept = document.getElementById('departmentCode');
+        if (!org || !dept) {
+            return;
+        }
+        var all = Array.prototype.slice.call(dept.querySelectorAll('option[data-org]'));
+
+        function sync(keepValue) {
+            var selected = org.value;
+            var current = keepValue ? dept.value : '';
+            var visible = 0;
+            all.forEach(function (option) {
+                var match = option.getAttribute('data-org') === selected;
+                option.hidden = !match;
+                option.disabled = !match;
+                if (match) {
+                    visible++;
+                }
+            });
+            var stillValid = all.some(function (option) {
+                return option.value === current && !option.disabled;
+            });
+            dept.value = stillValid ? current : '';
+            dept.options[0].textContent = selected
+                ? (visible ? '请选择' : '该机构下暂无科室')
+                : '请先选择机构';
+        }
+
+        org.addEventListener('change', function () {
+            sync(false);
+        });
+        sync(true);
+    })();
+</script>
+</body>
+</html>
