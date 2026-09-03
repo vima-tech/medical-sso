@@ -1,0 +1,120 @@
+# 注意相对路径的基准：本文件在 deploy/ 下，compose 以「compose 文件所在目录」
+# 为项目目录，因此下面的 ./xxx 指的是 deploy/xxx，.env 也从 deploy/.env 读。
+# 只有 build.context 指到仓库根（..），因为镜像要打包整个 Maven 工程。
+name: medical-sso
+
+services:
+  postgres:
+    image: docker.io/library/postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-keycloak}
+      POSTGRES_USER: ${POSTGRES_USER:-keycloak}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres-change-me}
+    volumes:
+      - keycloak-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-keycloak} -d ${POSTGRES_DB:-keycloak}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    mem_limit: 256m
+    restart: unless-stopped
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.3
+    # --features-disabled=admin 在引擎层面移除 Keycloak 自带的管理控制台，
+    # 只保留 admin-api 供统一身份管理平台调用。认证内核不承担直接管理职能。
+    command: ["start-dev", "--import-realm", "--features-disabled=admin"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD:-admin-change-me}
+      KC_DB: postgres
+      KC_DB_URL_HOST: postgres
+      KC_DB_URL_DATABASE: ${POSTGRES_DB:-keycloak}
+      KC_DB_USERNAME: ${POSTGRES_USER:-keycloak}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres-change-me}
+      KC_HEALTH_ENABLED: "true"
+      # 全部对外地址走网关的 /auth 前缀，Keycloak 自身不对外暴露端口
+      KC_HTTP_RELATIVE_PATH: /auth
+      KC_HOSTNAME: ${SSO_PUBLIC_URL:-http://localhost:18081}/auth
+      KC_PROXY_HEADERS: xforwarded
+      KC_HOSTNAME_STRICT: "false"
+      # 覆盖 Keycloak 默认的 MaxRAMPercentage=70。配合下面的 mem_limit，
+      # 堆上限变成 640m×50%=320m，实测稳态堆用量约 122m，留了一倍余量。
+      JAVA_OPTS_KC_HEAP: "-XX:MaxRAMPercentage=50"
+    # 镜像里没有 curl，用 bash 内建的 /dev/tcp 探管理端口 9000 的就绪端点。
+    # 门户依赖这个结果才启动，否则 OIDC discovery 失败会让它直接退出。
+    healthcheck:
+      test:
+        - CMD
+        - /bin/bash
+        - -ec
+        - |
+          exec 3<>/dev/tcp/127.0.0.1/9000
+          printf 'GET /auth/health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3
+          grep -Eq '"status"[[:space:]]*:[[:space:]]*"UP"' <&3
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 20s
+    volumes:
+      # 用小写 z（共享标签）而不是大写 Z（私有标签）：
+      # Z 会把目录打上「只有当前这个容器能读」的 SELinux 类别，容器一旦重建，
+      # 类别变了而目录标签没跟上，Keycloak 就读不到主题与 Realm 文件。
+      # 而且它是静默失败——主题会回退成内置主题，Realm 导入会什么都不做。
+      - ./keycloak/realm:/opt/keycloak/data/import:ro,z
+      - ./keycloak/themes:/opt/keycloak/themes:ro,z
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # 内存上限。不设限时 JVM 按宿主机总内存推算堆大小——实测本机 31 GB 宿主上，
+    # Keycloak 最大堆被算成 20.4 GB、门户 7.29 GB，而两者实际各只用一百多 MB。
+    # 多出来的 RSS 全是为这份用不上的额度准备的开销。设了上限，JVM 改按上限推算。
+    mem_limit: 640m
+    restart: unless-stopped
+
+  gateway:
+    image: docker.io/library/nginx:alpine
+    # 整套系统对外唯一的入口
+    ports:
+      - "${PLATFORM_PORT:-18081}:18081"
+    volumes:
+      - ./gateway/nginx.conf:/etc/nginx/nginx.conf:ro,Z
+    depends_on:
+      - keycloak
+    mem_limit: 64m
+    restart: unless-stopped
+
+  portal:
+    # 统一身份管理平台。与生产用同一个 Containerfile：多阶段构建，
+    # Maven 只存在于构建阶段，跑起来的机器不需要装 JDK 和 Maven。
+    # 不要改成「COPY 宿主机已构建的 jar」——那样新克隆的仓库直接跑不起来，
+    # 而这恰恰是别人第一次接触本项目时要执行的命令。
+    build:
+      context: ..
+      dockerfile: deploy/Containerfile
+    image: medical-sso-portal:0.1.0
+    # 与网关共享网络命名空间，不是随手写的耦合，是 issuer 逼出来的：
+    # 令牌里的 iss 是对外地址 http://localhost:18081/auth/realms/medical，
+    # 门户做 OIDC discovery 必须用同一个字面地址去请求，否则 iss 校验不过。
+    # 而容器自己的 localhost 到不了网关——共享命名空间后，容器内的
+    # localhost:18081 就是网关，网关也能用 127.0.0.1:18082 回连门户。
+    # 代价是门户不能有自己的 ports 和 networks，这正好是我们要的：不对外暴露。
+    network_mode: "service:gateway"
+    environment:
+      SSO_ISSUER: ${SSO_PUBLIC_URL:-http://localhost:18081}/auth/realms/medical
+      SSO_PORTAL_CLIENT_SECRET: ${SSO_PORTAL_CLIENT_SECRET:-portal-dev-secret}
+      SSO_ADMIN_CLIENT_SECRET: ${SSO_ADMIN_CLIENT_SECRET:-portal-admin-dev-secret}
+      # 镜像的 ENTRYPOINT 是裸 java -jar，没有可插参数的位置，所以走 JAVA_TOOL_OPTIONS。
+      # 堆上限 448m×50%=224m，实测门户稳态远低于此。
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=50"
+    depends_on:
+      keycloak:
+        condition: service_healthy
+      gateway:
+        condition: service_started
+    mem_limit: 448m
+    restart: unless-stopped
+
+volumes:
+  keycloak-postgres:

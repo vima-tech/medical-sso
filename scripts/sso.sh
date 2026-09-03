@@ -9,51 +9,36 @@
 #   ./scripts/sso.sh status    看运行状态
 #   ./scripts/sso.sh logs      看日志，可跟服务名只看其中一个
 #
-# 想跑带演示子系统的完整环境，用 scripts/start-local.sh，不要用这里。
+# 想跑带演示子系统的完整环境，用 scripts/demo/start-local.sh，不要用这里。
 set -euo pipefail
 
 project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$project_dir"
+source "$project_dir/scripts/lib/compose.sh"
+source "$project_dir/scripts/lib/dotenv.sh"
 
-if command -v docker >/dev/null 2>&1; then
-  compose=(docker compose)
-elif command -v podman >/dev/null 2>&1; then
-  compose=(podman compose)
-else
-  echo "未找到 Docker 或 Podman，请先安装容器运行环境。" >&2
-  exit 1
-fi
+# 先校验子命令再探测容器运行时：敲错命令时该看到用法，而不是「没装 Docker」
+case "${1:-}" in
+  start|stop|status|logs) ;;
+  *)
+    echo "用法：$0 {start|stop|status|logs [服务名]}" >&2
+    exit 1
+    ;;
+esac
 
-dotenv_value() {
-  local key="$1"
-  local line
-  [[ -f .env ]] || return 0
-  while IFS= read -r line; do
-    line="${line%$'\r'}"
-    if [[ "$line" == "$key="* ]]; then
-      printf '%s' "${line#*=}"
-      return
-    fi
-  done < .env
-}
-
-public_url() {
-  local url
-  url="${SSO_PUBLIC_URL:-$(dotenv_value SSO_PUBLIC_URL)}"
-  printf '%s' "${url:-http://localhost:$(dotenv_value PLATFORM_PORT)}"
-}
+sso_compose_detect || exit 1
 
 cmd_start() {
-  if [[ ! -f .env ]]; then
-    cp .env.example .env
-    echo "已从 .env.example 创建 .env。演示环境可直接使用，正式环境请先修改密码。"
-  fi
+  sso_ensure_env
 
   echo "启动中（首次会构建平台镜像，需要几分钟）..."
-  "${compose[@]}" up -d --build
+  # --force-recreate 不能省：podman compose 在镜像重建后不会重建已存在的容器，
+  # 于是「改完代码再 start」跑的仍是上一版镜像，界面看不到任何变化，
+  # 而这种「明明改了却没生效」极难自查。多花的时间只是容器重建，数据都在卷里。
+  sso_compose_dev up -d --build --force-recreate
 
   local url
-  url="$(public_url)"
+  url="$(sso_public_url)"
   echo "等待平台就绪..."
   for _ in $(seq 1 120); do
     if curl -fsS -o /dev/null "$url"; then
@@ -70,10 +55,10 @@ cmd_start() {
 }
 
 cmd_status() {
-  "${compose[@]}" ps
+  sso_compose_dev ps
   echo
   local url
-  url="$(public_url)"
+  url="$(sso_public_url)"
   if curl -fsS -o /dev/null "$url"; then
     echo "对外入口 $url 可访问。"
   else
@@ -83,9 +68,9 @@ cmd_status() {
 
 case "${1:-}" in
   start)  cmd_start ;;
-  stop)   "${compose[@]}" down ;;
+  stop)   sso_compose_dev down ;;
   status) cmd_status ;;
-  logs)   shift; "${compose[@]}" logs -f "$@" ;;
+  logs)   shift; sso_compose_dev logs -f "$@" ;;
   *)
     echo "用法：$0 {start|stop|status|logs [服务名]}" >&2
     exit 1

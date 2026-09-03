@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<!-- 管理台统一外壳：顶栏 + 模块导航 -->
+<th:block th:fragment="head(title)">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title th:text="${title} + ' · 统一身份管理平台'">统一身份管理平台</title>
+    <link rel="stylesheet" th:href="@{/css/portal.css}">
+    <link rel="stylesheet" th:href="@{/css/admin.css}">
+</th:block>
+
+<th:block th:fragment="nav(active)">
+    <header class="admin-topbar">
+        <a class="brand" th:href="@{/admin}">
+            <span class="brand-mark">+</span>
+            <span>
+                <strong>统一身份管理平台</strong>
+                <small>医共体</small>
+            </span>
+        </a>
+        <nav class="admin-nav">
+            <a th:href="@{/admin}" th:classappend="${active == 'overview'} ? 'current' : ''">总览</a>
+            <a th:href="@{/admin/organizations}" th:classappend="${active == 'organizations'} ? 'current' : ''">机构与科室</a>
+            <a th:href="@{/admin/staff}" th:classappend="${active == 'staff'} ? 'current' : ''">人员管理</a>
+            <a th:href="@{/admin/authorizations}" th:classappend="${active == 'authorizations'} ? 'current' : ''">授权中心</a>
+            <a th:href="@{/admin/subsystems}" th:classappend="${active == 'subsystems'} ? 'current' : ''">业务系统</a>
+            <a th:href="@{/admin/identities}" th:classappend="${active == 'identities'} ? 'current' : ''">通用身份</a>
+            <a th:href="@{/admin/audit}" th:classappend="${active == 'audit'} ? 'current' : ''">审计记录</a>
+        </nav>
+        <div class="admin-topbar-actions">
+            <a class="account-link" th:href="@{/apps}">应用门户</a>
+            <a class="account-link" th:href="@{/account}">账号与安全</a>
+            <form th:action="@{/logout}" method="post">
+                <button class="quiet-button" type="submit">退出</button>
+            </form>
+        </div>
+    </header>
+</th:block>
+
+<!--
+  破坏性操作的二次确认。用原生 <dialog>：样式能与产品统一，
+  焦点管理和 Esc 关闭由浏览器负责，不用自己实现，也不用 confirm() 那种系统弹框。
+  接入方式：给 form 加 data-confirm（正文）和可选的 data-confirm-title、data-confirm-ok。
+-->
+<th:block th:fragment="confirm">
+    <dialog class="confirm-dialog" id="confirmDialog">
+        <form method="dialog">
+            <h2 data-confirm-slot="title">确认操作</h2>
+            <p data-confirm-slot="message">确定要执行该操作吗？</p>
+            <div class="confirm-actions">
+                <button class="quiet-button" value="cancel">取消</button>
+                <button class="primary-button danger-button" value="ok" data-confirm-slot="ok">确定</button>
+            </div>
+        </form>
+    </dialog>
+    <script>
+        (function () {
+            var dialog = document.getElementById('confirmDialog');
+            if (!dialog || typeof dialog.showModal !== 'function') {
+                return;   // 老浏览器不支持时不拦截，行为退回改动前
+            }
+            var slots = {
+                title: dialog.querySelector('[data-confirm-slot="title"]'),
+                message: dialog.querySelector('[data-confirm-slot="message"]'),
+                ok: dialog.querySelector('[data-confirm-slot="ok"]')
+            };
+            var pending = null;
+
+            document.addEventListener('submit', function (event) {
+                var form = event.target;
+                if (!form.hasAttribute('data-confirm') || form === pending) {
+                    return;
+                }
+                event.preventDefault();
+                slots.title.textContent = form.getAttribute('data-confirm-title') || '确认操作';
+                slots.message.textContent = form.getAttribute('data-confirm');
+                slots.ok.textContent = form.getAttribute('data-confirm-ok') || '确定';
+                pending = form;
+                dialog.showModal();
+            });
+
+            dialog.addEventListener('close', function () {
+                var form = pending;
+                pending = null;
+                if (form && dialog.returnValue === 'ok') {
+                    // 已经确认过，这次提交不再拦截
+                    form.submit();
+                }
+            });
+        })();
+    </script>
+</th:block>
+
+<th:block th:fragment="flash">
+    <div class="flash ok" th:if="${notice}" th:text="${notice}">操作成功</div>
+    <div class="flash bad" th:if="${error}" th:text="${error}">操作失败</div>
+</th:block>
+
+</body>
+</html>

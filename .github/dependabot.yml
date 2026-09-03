@@ -9,9 +9,11 @@ updates:
       # boot3 侧的大版本跃迁同样需要人工评估，一律不自动提 PR。
       - dependency-name: org.springframework.boot:spring-boot-starter-parent
         update-types: ["version-update:semver-major"]
-  # 根目录没有 Dockerfile，只有 medical-portal 下这一个；
-  # deploy/Containerfile 不是 Dependabot 识别的文件名，不纳入。
-  - package-ecosystem: docker
-    directory: /medical-portal
-    schedule:
-      interval: weekly
+
+# 这里没有 docker 生态条目，是有意的：
+# 仓库里唯一的镜像定义是 deploy/Containerfile，而 Dependabot 只识别名为
+# Dockerfile 的文件，扫不到它；compose 文件里的 postgres / keycloak / nginx
+# 镜像标签同样不在它的扫描范围内。原先指向 medical-portal/ 的那条 docker
+# 条目在该目录的 Dockerfile 删除后已经是空转，故移除。
+# 这几个基础镜像的版本升级走人工：deploy/Containerfile、deploy/compose.yml、
+# deploy/compose.prod.yml。

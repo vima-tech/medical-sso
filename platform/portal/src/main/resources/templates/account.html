@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>账号与安全 · 医共体统一身份认证</title>
+    <link rel="stylesheet" th:href="@{/css/portal.css}">
+</head>
+<body>
+<header class="topbar">
+    <a class="brand" th:href="@{/}">
+        <span class="brand-mark">+</span>
+        <span>
+            <strong>医共体统一应用门户</strong>
+            <small>Medical Union Workspace</small>
+        </span>
+    </a>
+    <div class="topbar-actions">
+        <a class="account-link" th:if="${subsystemAdmin}" th:href="@{/admin}">身份管理平台</a>
+        <a class="account-link" th:href="@{/apps}">应用门户</a>
+        <form th:action="@{/logout}" method="post">
+            <button class="quiet-button" type="submit">退出登录</button>
+        </form>
+    </div>
+</header>
+
+<main class="account">
+    <div class="flash bad" th:if="${error}" th:text="${error}">操作失败</div>
+
+    <section class="account-heading">
+        <p class="eyebrow">账号与安全</p>
+        <h1 th:text="${medicalUser.name() ?: medicalUser.username()}">张三</h1>
+        <p class="welcome-copy">查看本人身份、修改登录密码、管理已登录的设备。</p>
+    </section>
+
+    <section class="account-block">
+        <div class="account-block-head">
+            <h2>我的身份</h2>
+            <p>这些信息来自人事档案，由信息科在统一身份管理平台维护，本人不能自行修改。</p>
+        </div>
+        <dl class="account-facts">
+            <div>
+                <dt>姓名</dt>
+                <dd th:text="${medicalUser.name() ?: '-'}">张三</dd>
+            </div>
+            <div>
+                <dt>登录名</dt>
+                <dd><code th:text="${medicalUser.username()}">zhangsan</code></dd>
+            </div>
+            <div>
+                <dt>工号</dt>
+                <dd th:text="${medicalUser.employeeNo() ?: '-'}">10086</dd>
+            </div>
+            <div>
+                <dt>统一人员标识</dt>
+                <dd><code th:text="${medicalUser.personId() ?: '-'}">P000123</code></dd>
+            </div>
+            <div>
+                <dt>机构</dt>
+                <dd th:text="${medicalUser.organizationCode() == null ? '-'
+                    : (orgNames[medicalUser.organizationCode()] ?: medicalUser.organizationCode())}">第一人民医院</dd>
+            </div>
+            <div>
+                <dt>科室</dt>
+                <dd th:text="${medicalUser.departmentCode() == null ? '-'
+                    : (orgNames[medicalUser.departmentCode()] ?: medicalUser.departmentCode())}">内科</dd>
+            </div>
+            <div class="account-facts-wide">
+                <dt>通用身份</dt>
+                <dd>
+                    <span class="tag" th:each="entry : ${identityLabels}" th:text="${entry.value}">医生</span>
+                    <span th:if="${identityLabels.isEmpty()}">-</span>
+                </dd>
+            </div>
+        </dl>
+        <p class="account-note">信息有误请联系本机构信息科管理员更正，改动会同步到所有已接入的业务系统。</p>
+    </section>
+
+    <section class="account-block">
+        <div class="account-block-head">
+            <h2>登录密码</h2>
+            <p>修改密码前需要先验证当前密码。改完后其它设备上已经登录的会话不受影响，
+                如果怀疑密码泄露，请在下方一并退出全部设备。</p>
+        </div>
+        <a class="primary-button" th:href="@{${changePasswordUri}}">修改密码</a>
+    </section>
+
+    <section class="account-block" th:if="${sessionsAvailable}">
+        <div class="account-block-head">
+            <h2>登录设备</h2>
+            <p>本人当前有效的登录。发现不认识的来源 IP，请立即改密码并退出全部设备。</p>
+        </div>
+
+        <table class="account-table" th:if="${!sessions.isEmpty()}">
+            <thead>
+            <tr>
+                <th>开始时间</th>
+                <th>最近活动</th>
+                <th>来源 IP</th>
+                <th>已进入的业务系统</th>
+            </tr>
+            </thead>
+            <tbody>
+            <!-- 循环变量不能叫 session：Thymeleaf 把它当保留字，赋值直接抛异常。 -->
+            <tr th:each="login : ${sessions}">
+                <td th:text="${login.startedAt()}">2026-09-03 12:27:14</td>
+                <td th:text="${login.lastAccessAt()}">2026-09-03 12:30:02</td>
+                <td><code th:text="${login.ip()}">10.0.0.1</code></td>
+                <td th:text="${login.systems().isEmpty() ? '-' : #strings.listJoin(login.systems(), '、')}">
+                    住院医生工作站
+                </td>
+            </tr>
+            </tbody>
+        </table>
+
+        <p class="account-note" th:if="${sessions.isEmpty()}">当前没有查询到有效登录。</p>
+
+        <form class="account-danger" method="post" th:action="@{/account/logout-everywhere}"
+              data-confirm="所有设备上的登录都会失效，包括你正在用的这一台，之后需要重新登录。"
+              data-confirm-title="退出全部设备"
+              data-confirm-ok="全部退出">
+            <button class="quiet-button danger-text" type="submit">退出全部设备（含当前设备）</button>
+        </form>
+    </section>
+</main>
+
+<footer>
+    <span>医共体统一身份认证平台</span>
+    <span>统一人员标识：<code th:text="${medicalUser.personId() ?: medicalUser.subject()}">P000123</code></span>
+</footer>
+
+<!--
+  破坏性操作的二次确认。与管理台用同一套：原生 <dialog>，样式跟随产品，
+  焦点管理和 Esc 关闭交给浏览器，不用 confirm() 那种系统弹框。
+-->
+<dialog class="confirm-dialog" id="confirmDialog">
+    <form method="dialog">
+        <h2 data-confirm-slot="title">确认操作</h2>
+        <p data-confirm-slot="message">确定要执行该操作吗？</p>
+        <div class="confirm-actions">
+            <button class="quiet-button" value="cancel">取消</button>
+            <button class="primary-button danger-button" value="ok" data-confirm-slot="ok">确定</button>
+        </div>
+    </form>
+</dialog>
+<script>
+    (function () {
+        var dialog = document.getElementById('confirmDialog');
+        if (!dialog || typeof dialog.showModal !== 'function') {
+            return;   // 老浏览器不支持时不拦截，行为退回改动前
+        }
+        var slots = {
+            title: dialog.querySelector('[data-confirm-slot="title"]'),
+            message: dialog.querySelector('[data-confirm-slot="message"]'),
+            ok: dialog.querySelector('[data-confirm-slot="ok"]')
+        };
+        var pending = null;
+        document.addEventListener('submit', function (event) {
+            var form = event.target;
+            if (!form.hasAttribute('data-confirm') || form === pending) {
+                return;
+            }
+            event.preventDefault();
+            slots.title.textContent = form.getAttribute('data-confirm-title') || '确认操作';
+            slots.message.textContent = form.getAttribute('data-confirm');
+            slots.ok.textContent = form.getAttribute('data-confirm-ok') || '确定';
+            pending = form;
+            dialog.showModal();
+        });
+        dialog.addEventListener('close', function () {
+            var form = pending;
+            pending = null;
+            if (form && dialog.returnValue === 'ok') {
+                form.submit();
+            }
+        });
+    })();
+</script>
+</body>
+</html>

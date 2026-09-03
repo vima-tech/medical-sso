@@ -329,6 +329,7 @@
         }
       ],
       "realmRoles": [
+        "default-roles-medical",
         "sso-platform-admin"
       ],
       "clientRoles": {

@@ -1,12 +1,20 @@
+# 统一身份管理平台的镜像定义，deploy/compose.yml（本机）与 deploy/compose.prod.yml（生产）共用这一个。
+#
+# 这里是多阶段构建：Maven 只存在于构建阶段，运行镜像里只有 JRE 和 jar，
+# 所以跑它的机器不需要装 JDK 和 Maven。
+#
+# 不要改成「COPY 宿主机 target/ 里已构建的 jar」——那样确实省一次容器内构建，
+# 但新克隆的仓库会直接在 COPY 这步失败，而那正是别人第一次接触本项目时执行的命令。
+
 FROM docker.io/library/maven:3.9.11-eclipse-temurin-17 AS build
 WORKDIR /workspace
 COPY . .
-RUN mvn -Dmaven.repo.local=/workspace/.m2/repository -q -pl medical-portal -am -DskipTests package
+RUN mvn -Dmaven.repo.local=/workspace/.m2/repository -q -pl platform/portal -am -DskipTests package
 
 FROM docker.io/library/eclipse-temurin:17-jre
 RUN useradd --system --uid 10001 --home-dir /app app
 WORKDIR /app
-COPY --from=build /workspace/medical-portal/target/medical-portal-0.1.0.jar /app/app.jar
+COPY --from=build /workspace/platform/portal/target/medical-portal-0.1.0.jar /app/app.jar
 USER 10001
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]

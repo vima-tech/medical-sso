@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{admin/shell :: head('接入自检')}"></head>
+<body>
+<div th:replace="~{admin/shell :: nav('subsystems')}"></div>
+<div th:replace="~{admin/shell :: confirm}"></div>
+
+<main class="admin-main narrow">
+    <div th:replace="~{admin/shell :: flash}"></div>
+
+    <section class="admin-heading">
+        <div>
+            <h1>接入自检</h1>
+            <p>
+                <span th:text="${subsystem.name()}">住院系统</span>
+                <code th:text="${subsystem.clientId()}">his-web</code>
+            </p>
+        </div>
+        <div class="org-actions">
+            <a th:href="@{'/admin/subsystems/' + ${subsystem.clientId()}}">系统管理</a>
+            <a class="quiet-button" th:href="@{'/admin/subsystems/' + ${subsystem.clientId()} + '/check'}">重新检查</a>
+        </div>
+    </section>
+
+    <div class="flash ok" th:if="${report.ready() and report.warnings() == 0}">
+        全部检查通过，可以接入。
+    </div>
+    <div class="flash ok" th:if="${report.ready() and report.warnings() > 0}"
+         th:text="'关键项全部通过，另有 ' + ${report.warnings()} + ' 项提醒，见下方说明。'">
+        关键项通过
+    </div>
+    <div class="flash bad" th:unless="${report.ready()}"
+         th:text="${report.failures()} + ' 项必须先修复，否则该系统无法正常登录。'">
+        存在阻塞项
+    </div>
+
+    <!-- 要处理的排在最前面。十来项里通常只有一两条需要动，平铺会把它埋掉。 -->
+    <ul class="check-list" th:if="${!report.problems().isEmpty()}">
+        <li th:each="c : ${report.problems()}" th:classappend="${c.status().name().toLowerCase()}">
+            <span class="check-mark"
+                  th:text="${c.status().name() == 'WARN'} ? '提醒' : '阻塞'">阻塞</span>
+            <div>
+                <strong th:text="${c.item()}">检查项</strong>
+                <p th:text="${c.detail()}">结论</p>
+                <p class="check-fix" th:if="${c.fix()}" th:text="'处理：' + ${c.fix()}">修复动作</p>
+            </div>
+        </li>
+    </ul>
+
+    <details class="check-passed" th:if="${!report.passed().isEmpty()}">
+        <summary th:text="'已通过 ' + ${report.passed().size()} + ' 项，展开逐条核对'">已通过若干项</summary>
+        <ul class="check-list">
+            <li th:each="c : ${report.passed()}" class="pass">
+                <span class="check-mark">通过</span>
+                <div>
+                    <strong th:text="${c.item()}">检查项</strong>
+                    <p th:text="${c.detail()}">结论</p>
+                </div>
+            </li>
+        </ul>
+    </details>
+
+    <p class="hint">
+        自检只覆盖平台这一侧能判断的内容。业务系统自己的配置是否填对，
+        以最终能否走通一次登录为准——按「对接文档」配好后点上方的统一登录试一次即可。
+    </p>
+</main>
+</body>
+</html>

@@ -1,28 +1,36 @@
-# Spring Boot 子系统接入指南
+# 子系统接入指南
 
-本文面向需要接入医共体统一身份认证的 Spring Boot 系统。统一认证采用 OpenID Connect Authorization Code Flow，浏览器系统由 Spring Security 建立本地 Session，接口系统校验 Bearer JWT。
+本文面向需要接入医共体统一身份认证的业务系统。统一认证采用 OpenID Connect Authorization Code Flow，浏览器系统由 Spring Security 建立本地 Session，接口系统校验 Bearer JWT。
 
 **最快的接入方式不是读这份文档。** 让认证平台管理员在管理平台的「业务系统」里登记你的系统，登记完成后页面会直接给出填好真实参数的依赖、配置和代码，复制到项目里即可。本文是那份生成结果的完整背景说明，用于排查问题和理解约定。
 
-先按你的系统情况选一种接入方式，四选一，不要挨个看完：
+## 怎么读这份文档
 
-| 你的系统 | 接入方式 | 改动量 | 见 |
+**第一节所有人都要读**，它讲清楚平台会给你什么、Token 里有什么。**之后只读属于你的那一节**，四条路线各自闭环，不需要在章节之间来回跳：
+
+| 你的系统 | 接入方式 | 改动量 | 读哪一节 |
 | --- | --- | --- | --- |
-| Spring Boot，没有自己的登录体系 | 标准接入 | 两段配置 + 一个安全配置类 | 第三节；JDK 8 见第十节 |
-| Spring Boot，已有账号密码登录，且要**两种登录并存** | 桥接模式 | 实现一个接口，共两个方法 | 第十二节 |
-| 不是 Java、没有源码、或代码动不了 | 接入网关 | **零改动**，在它前面挂一个网关进程 | 第十三节 |
-| 只提供接口、不做页面 | 资源服务 | 一段配置 | 第四节 |
+| Spring Boot，没有自己的登录体系 | 标准接入 | 两段配置 + 一个安全配置类 | [第二节](#二标准接入spring-boot-系统自己没有登录) |
+| Spring Boot，已有账号密码登录，且要**两种登录并存** | 桥接模式 | 实现一个接口，共两个方法 | [第三节](#三桥接模式已有登录体系两种登录并存) |
+| 不是 Java、没有源码、或代码动不了 | 接入网关 | **零改动**，在它前面挂一个网关进程 | [第四节](#四接入网关改不动的系统) |
+| 只提供接口、不做页面 | 资源服务 | 一段配置 | [第五节](#五资源服务只提供接口不做页面) |
 
-按 JDK 版本选择接入组件（前两种方式都用它）：
+读完自己那一节之后，第六节到第九节（统一退出、登记、验收、常见问题）是四条路线共用的收尾内容。
+
+按 JDK 版本选择接入组件（标准接入和桥接模式都用它）：
 
 | 子系统 | 接入组件 | 说明 |
 | --- | --- | --- |
 | Spring Boot 3.x / JDK 17+ | `medical-sso-spring-boot-starter` | |
-| Spring Boot 2.3 - 2.7 / JDK 8 | `medical-sso-spring-boot2-starter` | 按 Java 8 字节码发布，见第十节 |
+| Spring Boot 2.3 - 2.7 / JDK 8 | `medical-sso-spring-boot2-starter` | 按 Java 8 字节码发布 |
 
 两套组件的包名、类名和方法完全一致，业务代码可以直接互换，只有 Maven 依赖和 `HttpSecurity` 写法不同。
 
-## 一、接入前准备
+## 一、先读这一节
+
+四条接入路线共用的约定：平台会给你什么参数、Token 里有哪些字段、授权判断怎么落地。
+
+### 接入前准备
 
 认证平台管理员需要为每个子系统提供：
 
@@ -36,7 +44,7 @@
 
 接入方需要提供：系统名称、系统编码、访问地址、回调地址、退出返回地址、联系人，以及需要建立的系统角色。
 
-## 二、角色和字段约定
+### 身份字段与角色约定
 
 统一 Token 中只放身份和粗粒度授权信息：
 
@@ -64,9 +72,47 @@
 
 每个系统至少建立一个 `access` Client Role。没有业务 RBAC 的旧系统只检查 `ROLE_CLIENT_ACCESS`，有现有 RBAC 的系统在首次登录时用 `person_id` 关联本地用户，并继续使用本地菜单、岗位和数据权限。
 
-## 三、MVC 页面系统接入
+### 授权怎么落地
 
-### 安装本项目 Starter
+登录解决「你是谁」，这一小节解决「你能做什么」。按你的系统有没有自己的权限表分两种做法。
+
+#### 已有账号和 RBAC 的系统
+
+推荐采用“统一认证、本地授权”模式：
+
+1. 用户在 Keycloak 完成登录。
+2. 子系统用 `person_id` 查找本地用户映射。
+3. 找到映射后建立原有业务上下文，继续使用本地 RBAC。
+4. 找不到映射时显示“账号尚未关联”，不要按姓名或手机号自动猜测。
+
+建议增加最小映射字段：
+
+```text
+local_user_id
+person_id       唯一
+enabled
+last_login_at
+```
+
+不要同步或覆盖旧系统的业务权限表。菜单权限、病区权限、数据范围、处方权限仍由业务系统负责。
+
+#### 没有 RBAC 的系统
+
+最小方案只使用 `access`：
+
+```java
+.anyRequest().hasAuthority("ROLE_CLIENT_ACCESS")
+```
+
+管理员给用户分配 `<client-id>/access` 后可以进入系统，撤销后新 Token 不再包含该角色。已经建立的本地 Session 不会立即消失，因此重要系统应缩短 Session，或增加集中退出与禁用用户后的会话清理流程。
+
+## 二、标准接入：Spring Boot 系统自己没有登录
+
+登录完全交给统一认证，系统里不再保留账号密码表。两段配置加一个安全配置类即可，按 JDK 版本选下面对应的一小节，只读一个。
+
+### Spring Boot 3.x / JDK 17+
+
+#### 安装本项目 Starter
 
 在本项目根目录执行：
 
@@ -94,7 +140,7 @@ mvn -Dmaven.repo.local=.m2/repository -DskipTests install
 </dependency>
 ```
 
-### 添加配置
+#### 添加配置
 
 ```yaml
 server:
@@ -125,7 +171,7 @@ medical:
 
 不要把生产 Secret 写进 Git。通过环境变量、容器 Secret 或配置中心注入。
 
-### 添加安全配置
+#### 添加安全配置
 
 统一认证的所有客户端都强制 PKCE（`S256`）。Spring Security 只会给公共客户端自动附带 PKCE 参数，**保密客户端（配了 client-secret）默认不发**，因此必须显式开启，否则授权请求会被 Keycloak 直接拒绝。
 
@@ -172,7 +218,7 @@ PKCE 不替代 client-secret。保密客户端两者都要：secret 保护换取
 - `his-user` 转成 `ROLE_CLIENT_HIS_USER`
 - `access` 转成 `ROLE_CLIENT_ACCESS`
 
-### 获取统一用户
+#### 获取统一用户
 
 ```java
 @Controller
@@ -191,159 +237,15 @@ class HomeController {
 }
 ```
 
-完整可运行代码见 `medical-sso-demo`。
+完整可运行代码见 `samples/boot3`。
 
-## 四、REST API 接入
-
-接口服务不建立浏览器 Session，只校验调用方携带的 Access Token。
-
-```yaml
-spring:
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          issuer-uri: ${SSO_ISSUER:https://sso.intra.example/auth/realms/medical}
-
-medical:
-  sso:
-    client-id: his-api
-```
-
-```java
-@Configuration
-class ApiSecurityConfiguration {
-
-    @Bean
-    SecurityFilterChain apiSecurity(
-            HttpSecurity http,
-            MedicalJwtAuthenticationConverter converter) throws Exception {
-        return http
-                .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/actuator/health").permitAll()
-                        .anyRequest().hasAuthority("ROLE_CLIENT_ACCESS"))
-                .oauth2ResourceServer(resourceServer -> resourceServer
-                        .jwt(jwt -> jwt.jwtAuthenticationConverter(converter)))
-                .build();
-    }
-}
-```
-
-接入组件默认校验 Access Token 的 `aud` 是否包含 `medical.sso.client-id`，不包含直接返回 401。
-
-这项校验不能省。Keycloak 客户端默认 `fullScopeAllowed=true`，用户在**所有**系统的角色都会写进任意一个客户端签发的 Token。也就是说 A 系统拿到的 Token 里同样带着该用户在 B 接口的 `resource_access.<B>.roles`；B 接口如果只看角色不看 audience，就会把 A 的 Token 当成合法调用放行。
-
-登记子系统时平台会自动挂 audience 映射，`aud` 里会有本系统的 Client ID。手工建的老客户端可能没有这个映射，过渡期可以先关掉：
-
-```yaml
-medical:
-  sso:
-    client-id: his-api
-    require-audience: false      # 仅限过渡，补上 audience 映射后请改回 true
-```
-
-进一步收紧可以把客户端的 `fullScopeAllowed` 关掉，让 Token 只携带本系统相关角色。注意关闭后需要为客户端显式添加 Realm 角色的 Scope 映射，否则 `realm_access.roles` 会变空，依赖 `doctor`、`nurse` 的判断会失效。改动前先在测试环境验证。
-
-## 五、已有账号和 RBAC 的系统
-
-推荐采用“统一认证、本地授权”模式：
-
-1. 用户在 Keycloak 完成登录。
-2. 子系统用 `person_id` 查找本地用户映射。
-3. 找到映射后建立原有业务上下文，继续使用本地 RBAC。
-4. 找不到映射时显示“账号尚未关联”，不要按姓名或手机号自动猜测。
-
-建议增加最小映射字段：
-
-```text
-local_user_id
-person_id       唯一
-enabled
-last_login_at
-```
-
-不要同步或覆盖旧系统的业务权限表。菜单权限、病区权限、数据范围、处方权限仍由业务系统负责。
-
-## 六、没有 RBAC 的系统
-
-最小方案只使用 `access`：
-
-```java
-.anyRequest().hasAuthority("ROLE_CLIENT_ACCESS")
-```
-
-管理员给用户分配 `<client-id>/access` 后可以进入系统，撤销后新 Token 不再包含该角色。已经建立的本地 Session 不会立即消失，因此重要系统应缩短 Session，或增加集中退出与禁用用户后的会话清理流程。
-
-## 七、统一退出
-
-MVC 系统建议配置 OIDC RP-Initiated Logout：
-
-```java
-@Bean
-LogoutSuccessHandler logoutSuccessHandler(
-        ClientRegistrationRepository registrations) {
-    OidcClientInitiatedLogoutSuccessHandler handler =
-            new OidcClientInitiatedLogoutSuccessHandler(registrations);
-    handler.setPostLogoutRedirectUri("{baseUrl}/");
-    return handler;
-}
-```
-
-然后挂到安全配置：
-
-```java
-.logout(logout -> logout.logoutSuccessHandler(logoutSuccessHandler))
-```
-
-退出请求应使用 POST，并保留 Spring Security 的 CSRF 防护。
-
-## 八、验收清单
-
-- 未登录访问受保护页面会跳转统一登录页。
-- 跳转统一登录页的 authorize 链接带 `code_challenge` 与 `code_challenge_method=S256`。
-- 登录后能取得正确的 `person_id`、工号、机构、科室。
-- 用户只有本系统 `access` 角色时才允许进入。
-- A 系统角色不会错误授予 B 系统权限。
-- 退出后重新访问会要求再次登录。
-- 回调地址、Issuer 均使用固定域名，不混用 IP、主机名和 HTTP/HTTPS。
-- Secret 未出现在前端代码、日志和版本库。
-- 子系统按 `person_id` 建立本地账号映射。
-
-## 九、常见问题
-
-### 跳转登录页时 Keycloak 报错拒绝请求
-
-统一认证对所有客户端强制 PKCE。错误信息通常是 `Missing parameter: code_challenge_method` 或 `invalid_request`。原因是保密客户端没有显式开启 PKCE——Spring Security 只对公共客户端自动附带。按上面「添加安全配置」配好 `OAuth2AuthorizationRequestCustomizers.withPkce()` 即可。
-
-排查顺序：先看 authorize 链接有没有 `code_challenge`；没有是客户端没开，有还报错就核对 Keycloak 客户端的 `pkce.code.challenge.method` 是否为 `S256`。
-
-### 页面反复跳转登录
-
-检查浏览器访问地址、Redirect URI、服务端识别的协议和域名是否一致。
-
-这里要两边都做到：反向代理必须正确传递 `X-Forwarded-Proto`、`X-Forwarded-Host`，
-**应用也必须配 `server.forward-headers-strategy: framework` 去采信它们**。
-只做代理那一半，Spring 根本不看这些头，照样用内网地址拼 `redirect_uri`。
-
-### 登录成功但返回 403
-
-确认用户已经分配当前 Client 下的 `access` 角色，并确认 `medical.sso.client-id` 与 Keycloak Client ID 完全一致。
-
-### 能登录但人员字段为空
-
-确认用户设置了 `person_id`、`employee_no`、`org_code`、`dept_code`，并确认 Client 挂载了 `medical-profile` 默认 Scope。
-
-### 修改角色后没有立即生效
-
-角色写入 Token，旧 Token 和本地 Session 可能仍然有效。退出后重新登录验证；生产环境根据风险设置较短的 Access Token 和应用 Session。
-
-## 十、JDK 8 子系统接入
+### Spring Boot 2.3 - 2.7 / JDK 8
 
 子系统还在 Java 8 上时使用 `medical-sso-spring-boot2-starter`。它按 Java 8 字节码发布，编译基线是 Spring Boot 2.7.18，内部只使用 Spring Security 5.3 起就稳定的 API，可用于 Spring Boot 2.3 - 2.7。项目实测覆盖 Spring Boot 2.7.18，更低版本请自行回归一次登录流。
 
 Spring Boot 2.0 - 2.2 不在支持范围内：这些版本的 Spring Security 没有 `setAuthorizationRequestCustomizer`，无法按统一认证的要求发送 PKCE 参数。这类系统需要先升到 2.3 以上，或改由前置网关代为认证。
 
-### 依赖
+#### 依赖
 
 ```xml
 <dependency>
@@ -358,11 +260,11 @@ Spring Boot 2.0 - 2.2 不在支持范围内：这些版本的 Spring Security �
 </dependency>
 ```
 
-### 配置
+#### 配置
 
-配置项与 JDK 17 版本完全相同，直接照第三节的 `application.yml` 填写。
+配置项与 JDK 17 版本完全相同，直接照上一小节「Spring Boot 3.x / JDK 17+」的 `application.yml` 填写。
 
-### 安全配置
+#### 安全配置
 
 只有 `HttpSecurity` 的写法不同，Spring Boot 2.x 用 `authorizeRequests` 和 `antMatchers`：
 
@@ -389,7 +291,7 @@ public class SecurityConfiguration {
 }
 ```
 
-### 为什么 PKCE 这一行不能省
+#### 为什么 PKCE 这一行不能省
 
 Spring Security 6（Boot 3）在没有显式配置时，会去容器里找 `OAuth2AuthorizationRequestResolver` Bean 并自动采用；Spring Security 5.7（Boot 2.x）不做这个查找，直接走内部字段，找不到就退回不带 PKCE 的默认实现。两边实测确认过这个差异。
 
@@ -397,40 +299,13 @@ Spring Security 6（Boot 3）在没有显式配置时，会去容器里找 `OAut
 
 不要因为在 JDK 17 项目上删掉这一行仍然能登录，就认为它可有可无——同样的删改在 JDK 8 项目上会直接导致 Keycloak 拒绝授权请求。
 
-### 取统一用户
+#### 取统一用户
 
 与 JDK 17 版本一致。`MedicalUser` 在这里是普通类而不是 record，但访问方法名相同，`user.personId()` 一类的调用可以直接复制。同时保留了 `getPersonId()` 形式的 getter，方便老框架和 JSON 序列化。
 
-完整可运行代码见 `medical-sso-demo-boot2`。
+完整可运行代码见 `samples/boot2`。
 
-## 十一、在门户中登记子系统
-
-认证平台管理员在管理平台的「业务系统」中登记，只需要四项：系统名称、系统编码、系统访问地址、接入方式。
-
-登记后自动完成：
-
-- 建立 Keycloak 客户端并生成 Client Secret
-- 按访问地址推导回调地址、退出返回地址和 Web Origin
-- 强制 PKCE `S256`
-- 挂载 `medical-profile` 默认 Scope 和 audience 映射
-- 建立本系统的 `access` 角色
-
-随后页面直接给出该系统专属的对接文档：依赖、`application.yml`、安全配置、取用户代码都已填好真实的 Client ID、Secret 和 Issuer，可以逐段复制。
-
-Client Secret 只在登记完成后展示一次，请立即交给子系统负责人并存入密钥系统。页面关闭后需要重新生成。
-
-登记完成后仍需人工做一件事：在「授权中心」给人员勾选该系统，否则用户能登录但会被子系统拒绝。
-
-### 接入自检
-
-配好之后先别急着调登录。在业务系统列表点「自检」，平台会逐项检查：系统是否启用、是否强制 PKCE、
-回调地址与访问地址是否一致、有没有 `access` 角色、有没有挂 `medical-profile`、有没有 audience 映射、
-有没有人被授权、平台能不能连上这个系统。每项异常都会给出该怎么改。
-
-其中「回调地址与访问地址不一致」是最高频的故障，表现为登录后一直跳回登录页，看日志看不出问题。
-
-
-## 十二、已有登录体系的系统（桥接模式）
+## 三、桥接模式：已有登录体系，两种登录并存
 
 适用于这种情况：系统已经有自己的账号密码登录和会话机制，接入统一认证以后，
 **两种登录方式要并存**——统一认证是主入口，原有的账号密码登录不能停。
@@ -577,9 +452,9 @@ if (!res.ok) throw new Error(data.message)
 
 登记时接入方式选「已有账号密码登录」，平台会自动把回调地址登记成 `/api/auth/sso/callback`，不需要再手工调整。
 
-完整可运行代码见 `medical-sso-demo-legacy`，包含登录页、绑定页和一套模拟的旧账号体系。
+完整可运行代码见 `samples/legacy`，包含登录页、绑定页和一套模拟的旧账号体系。
 
-## 十三、改不动的系统（接入网关）
+## 四、接入网关：改不动的系统
 
 适用于：不是 Java 写的、买来的成品没有源码、或者动一行都要走变更流程的系统。
 
@@ -657,7 +532,7 @@ medical:
 ```
 
 ```bash
-java -jar medical-sso-gateway-0.1.0.jar --spring.config.location=file:./application.yml
+java -jar medical-sso-access-proxy-0.1.0.jar --spring.config.location=file:./application.yml
 ```
 
 登记时接入方式选「改不动的系统」，平台会自动把回调地址登记成 `/__sso/callback`。
@@ -671,3 +546,143 @@ java -jar medical-sso-gateway-0.1.0.jar --spring.config.location=file:./applicat
   不该由某一个业务系统替用户决定。
 - 登录状态放在网关进程内存里。网关重启后用户重新登录一次，因为统一认证那边的会话还在，这一步是无感的。
   要多实例部署时需要把它换成共享存储。
+
+## 五、资源服务：只提供接口、不做页面
+
+接口服务不建立浏览器 Session，只校验调用方携带的 Access Token。
+
+```yaml
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${SSO_ISSUER:https://sso.intra.example/auth/realms/medical}
+
+medical:
+  sso:
+    client-id: his-api
+```
+
+```java
+@Configuration
+class ApiSecurityConfiguration {
+
+    @Bean
+    SecurityFilterChain apiSecurity(
+            HttpSecurity http,
+            MedicalJwtAuthenticationConverter converter) throws Exception {
+        return http
+                .authorizeHttpRequests(authorize -> authorize
+                        .requestMatchers("/actuator/health").permitAll()
+                        .anyRequest().hasAuthority("ROLE_CLIENT_ACCESS"))
+                .oauth2ResourceServer(resourceServer -> resourceServer
+                        .jwt(jwt -> jwt.jwtAuthenticationConverter(converter)))
+                .build();
+    }
+}
+```
+
+接入组件默认校验 Access Token 的 `aud` 是否包含 `medical.sso.client-id`，不包含直接返回 401。
+
+这项校验不能省。Keycloak 客户端默认 `fullScopeAllowed=true`，用户在**所有**系统的角色都会写进任意一个客户端签发的 Token。也就是说 A 系统拿到的 Token 里同样带着该用户在 B 接口的 `resource_access.<B>.roles`；B 接口如果只看角色不看 audience，就会把 A 的 Token 当成合法调用放行。
+
+登记子系统时平台会自动挂 audience 映射，`aud` 里会有本系统的 Client ID。手工建的老客户端可能没有这个映射，过渡期可以先关掉：
+
+```yaml
+medical:
+  sso:
+    client-id: his-api
+    require-audience: false      # 仅限过渡，补上 audience 映射后请改回 true
+```
+
+进一步收紧可以把客户端的 `fullScopeAllowed` 关掉，让 Token 只携带本系统相关角色。注意关闭后需要为客户端显式添加 Realm 角色的 Scope 映射，否则 `realm_access.roles` 会变空，依赖 `doctor`、`nurse` 的判断会失效。改动前先在测试环境验证。
+
+## 六、统一退出
+
+MVC 系统建议配置 OIDC RP-Initiated Logout：
+
+```java
+@Bean
+LogoutSuccessHandler logoutSuccessHandler(
+        ClientRegistrationRepository registrations) {
+    OidcClientInitiatedLogoutSuccessHandler handler =
+            new OidcClientInitiatedLogoutSuccessHandler(registrations);
+    handler.setPostLogoutRedirectUri("{baseUrl}/");
+    return handler;
+}
+```
+
+然后挂到安全配置：
+
+```java
+.logout(logout -> logout.logoutSuccessHandler(logoutSuccessHandler))
+```
+
+退出请求应使用 POST，并保留 Spring Security 的 CSRF 防护。
+
+## 七、在门户中登记子系统
+
+认证平台管理员在管理平台的「业务系统」中登记，只需要四项：系统名称、系统编码、系统访问地址、接入方式。
+
+登记后自动完成：
+
+- 建立 Keycloak 客户端并生成 Client Secret
+- 按访问地址推导回调地址、退出返回地址和 Web Origin
+- 强制 PKCE `S256`
+- 挂载 `medical-profile` 默认 Scope 和 audience 映射
+- 建立本系统的 `access` 角色
+
+随后页面直接给出该系统专属的对接文档：依赖、`application.yml`、安全配置、取用户代码都已填好真实的 Client ID、Secret 和 Issuer，可以逐段复制。
+
+Client Secret 只在登记完成后展示一次，请立即交给子系统负责人并存入密钥系统。页面关闭后需要重新生成。
+
+登记完成后仍需人工做一件事：在「授权中心」给人员勾选该系统，否则用户能登录但会被子系统拒绝。
+
+### 接入自检
+
+配好之后先别急着调登录。在业务系统列表点「自检」，平台会逐项检查：系统是否启用、是否强制 PKCE、
+回调地址与访问地址是否一致、有没有 `access` 角色、有没有挂 `medical-profile`、有没有 audience 映射、
+有没有人被授权、平台能不能连上这个系统。每项异常都会给出该怎么改。
+
+其中「回调地址与访问地址不一致」是最高频的故障，表现为登录后一直跳回登录页，看日志看不出问题。
+
+## 八、验收清单
+
+- 未登录访问受保护页面会跳转统一登录页。
+- 跳转统一登录页的 authorize 链接带 `code_challenge` 与 `code_challenge_method=S256`。
+- 登录后能取得正确的 `person_id`、工号、机构、科室。
+- 用户只有本系统 `access` 角色时才允许进入。
+- A 系统角色不会错误授予 B 系统权限。
+- 退出后重新访问会要求再次登录。
+- 回调地址、Issuer 均使用固定域名，不混用 IP、主机名和 HTTP/HTTPS。
+- Secret 未出现在前端代码、日志和版本库。
+- 子系统按 `person_id` 建立本地账号映射。
+
+## 九、常见问题
+
+### 跳转登录页时 Keycloak 报错拒绝请求
+
+统一认证对所有客户端强制 PKCE。错误信息通常是 `Missing parameter: code_challenge_method` 或 `invalid_request`。原因是保密客户端没有显式开启 PKCE——Spring Security 只对公共客户端自动附带。按本节「添加安全配置」配好 `OAuth2AuthorizationRequestCustomizers.withPkce()` 即可。
+
+排查顺序：先看 authorize 链接有没有 `code_challenge`；没有是客户端没开，有还报错就核对 Keycloak 客户端的 `pkce.code.challenge.method` 是否为 `S256`。
+
+### 页面反复跳转登录
+
+检查浏览器访问地址、Redirect URI、服务端识别的协议和域名是否一致。
+
+这里要两边都做到：反向代理必须正确传递 `X-Forwarded-Proto`、`X-Forwarded-Host`，
+**应用也必须配 `server.forward-headers-strategy: framework` 去采信它们**。
+只做代理那一半，Spring 根本不看这些头，照样用内网地址拼 `redirect_uri`。
+
+### 登录成功但返回 403
+
+确认用户已经分配当前 Client 下的 `access` 角色，并确认 `medical.sso.client-id` 与 Keycloak Client ID 完全一致。
+
+### 能登录但人员字段为空
+
+确认用户设置了 `person_id`、`employee_no`、`org_code`、`dept_code`，并确认 Client 挂载了 `medical-profile` 默认 Scope。
+
+### 修改角色后没有立即生效
+
+角色写入 Token，旧 Token 和本地 Session 可能仍然有效。退出后重新登录验证；生产环境根据风险设置较短的 Access Token 和应用 Session。

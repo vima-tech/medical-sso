@@ -18,7 +18,7 @@ jobs:
           java-version: "17"
           cache: maven
       - name: Verify release candidate
-        run: ./scripts/check-release.sh
+        run: ./scripts/release/check-release.sh
 
   dependency-review:
     # 私有仓库没有 GitHub Advanced Security 时该 action 直接报错，

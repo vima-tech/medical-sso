@@ -346,4 +346,4 @@ Sustain 的 `Dept` 表只有 `id / name`，**没有编码字段**；统一身份
 
 ---
 
-参考：统一认证的完整接入文档见 `docs/INTEGRATION.md`（桥接模式见第十二节）；可运行的参考实现见 `medical-sso-demo-legacy`，它演示的正是本方案的完整链路——登录页、绑定页、一套模拟的旧账号体系。在管理平台登记完成后，系统会自动生成一份填好真实 `client-id`、`issuer` 的 Sustain 专属版本。
+参考：统一认证的完整接入文档见 `docs/INTEGRATION.md`（桥接模式见第十二节）；可运行的参考实现见 `samples/legacy`，它演示的正是本方案的完整链路——登录页、绑定页、一套模拟的旧账号体系。在管理平台登记完成后，系统会自动生成一份填好真实 `client-id`、`issuer` 的 Sustain 专属版本。

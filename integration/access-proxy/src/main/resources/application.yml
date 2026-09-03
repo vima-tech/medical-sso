@@ -1,0 +1,26 @@
+server:
+  port: 8085
+
+spring:
+  application:
+    name: medical-sso-access-proxy
+
+medical:
+  sso:
+    # 平台上为这个业务系统登记的系统编码
+    client-id: medical-gateway-demo
+    bridge:
+      issuer-uri: ${SSO_ISSUER:http://localhost:18081/auth/realms/medical}
+      client-secret: gateway-demo-dev-secret
+      # 必须与平台上登记的回调地址完全一致
+      redirect-uri: http://localhost:8085/__sso/callback
+  gateway:
+    # 业务系统的真实地址。它应当只监听回环或只对网关开放
+    upstream: http://127.0.0.1:9099
+    public-base-url: http://localhost:8085
+    upstream-token: gateway-to-upstream-dev-secret
+    session-ttl: 8h
+
+logging:
+  level:
+    com.medical.union: INFO

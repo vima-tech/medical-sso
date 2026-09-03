@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{admin/shell :: head('总览')}"></head>
+<body>
+<div th:replace="~{admin/shell :: nav('overview')}"></div>
+
+<main class="admin-main">
+    <div th:replace="~{admin/shell :: flash}"></div>
+
+    <section class="admin-heading">
+        <div>
+            <h1>总览</h1>
+            <p>平台当前的规模，以及需要留意的事。</p>
+        </div>
+        <div class="overview-actions">
+            <a class="quiet-button" th:href="@{/admin/authorizations}">授权中心</a>
+            <a class="quiet-button" th:href="@{/admin/staff/new}">新增人员</a>
+            <a class="primary-button" th:href="@{/admin/subsystems/new}">登记新系统</a>
+        </div>
+    </section>
+
+    <!-- 四个数字回答「这个平台现在多大」，点进去就是对应模块 -->
+    <div class="stat-grid">
+        <a class="stat-card" th:href="@{/admin/organizations}">
+            <span class="stat-value" th:text="${organizationCount}">1</span>
+            <span class="stat-label">成员机构</span>
+            <span class="stat-note" th:text="'下设 ' + ${departmentCount} + ' 个科室'">下设 2 个科室</span>
+        </a>
+        <a class="stat-card" th:href="@{/admin/staff}">
+            <span class="stat-value" th:text="${staffCount}">7</span>
+            <span class="stat-label">在册人员</span>
+            <span class="stat-note">含已停用账号</span>
+        </a>
+        <a class="stat-card" th:href="@{/admin/subsystems}">
+            <span class="stat-value" th:text="${subsystemCount}">6</span>
+            <span class="stat-label">已登记业务系统</span>
+            <span class="stat-note" th:if="${disabledSubsystemCount > 0}"
+                  th:text="'其中 ' + ${disabledSubsystemCount} + ' 个已停用'">其中 1 个已停用</span>
+            <span class="stat-note" th:if="${disabledSubsystemCount == 0}">全部已启用</span>
+        </a>
+        <a class="stat-card" th:href="@{/admin/identities}">
+            <span class="stat-value" th:text="${identityCount}">4</span>
+            <span class="stat-label">通用身份</span>
+            <span class="stat-note">医生、护士等跨系统岗位</span>
+        </a>
+    </div>
+
+    <!--
+      首页只放登录失败这一类「需要留意」：它是唯一一种不看就不会知道、
+      看了往往真有问题的信号（有人反复登不进去、或有人在试别人的账号）。
+      其它统计想看多少有多少，但放上来只是把这条淹掉。
+    -->
+    <section class="overview-block">
+        <div class="overview-block-head">
+            <div>
+                <h2>最近的登录失败</h2>
+                <p>有人反复登不进去，或有人在试别人的账号，都会先出现在这里。</p>
+            </div>
+            <a class="quiet-button" th:href="@{/admin/audit(type='LOGIN_ERROR')}">查看全部</a>
+        </div>
+
+        <table class="data-table" th:if="${!recentFailures.isEmpty()}">
+            <thead>
+            <tr>
+                <th>时间</th>
+                <th>人员</th>
+                <th>业务系统</th>
+                <th>来源 IP</th>
+                <th>原因</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="e : ${recentFailures}">
+                <td th:text="${e.time()}">2026-09-03 12:27:14</td>
+                <td th:text="${e.who()}">张三</td>
+                <td th:text="${e.system()}">住院医生工作站</td>
+                <td th:text="${e.ip()}">10.0.0.1</td>
+                <td th:text="${e.detail() ?: '-'}">invalid_user_credentials</td>
+            </tr>
+            </tbody>
+        </table>
+
+        <div class="empty-state" th:if="${recentFailures.isEmpty()}">
+            <strong>最近没有登录失败</strong>
+            <p>出现失败记录时会列在这里，也可以随时去审计记录里按类型筛选。</p>
+        </div>
+    </section>
+</main>
+</body>
+</html>

@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title th:text="${guide.name()} + ' 对接说明'">对接说明</title>
+    <!--
+      这份文件是发给外部厂商的：他们没有平台账号，多半也不在内网。
+      所以样式必须内联、不能有任何外链资源，双击打开就能读，也能直接打印成 PDF。
+    -->
+    <style>
+        :root {
+            --ink: #16322d; --muted: #61736d; --primary: #087568; --primary-strong: #055b51;
+            --primary-soft: #e2f2ee; --line: #d6e4df; --surface: #fbfdfc; --background: #f1f6f4;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0; padding: 3rem 1.5rem 4rem; background: var(--background); color: var(--ink);
+            font-family: "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif; line-height: 1.7;
+        }
+        main { width: min(50rem, 100%); margin: 0 auto; }
+        h1 { margin: 0 0 0.6rem; font-size: 1.9rem; letter-spacing: -0.02em; }
+        h2 { margin: 0; font-size: 1.05rem; }
+        code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.88em; }
+        .lead { margin: 0 0 2rem; color: var(--muted); font-size: 0.9rem; }
+        .lead code { color: var(--primary-strong); }
+        .badge {
+            display: inline-block; padding: 0.16rem 0.6rem; border-radius: 999px;
+            background: var(--primary-soft); color: var(--primary-strong);
+            font-size: 0.76rem; font-weight: 700;
+        }
+        .facts {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+            gap: 1rem 1.75rem; margin: 0 0 2rem; padding: 1.4rem 1.6rem;
+            border: 1px solid var(--line); border-radius: 0.9rem; background: var(--surface);
+        }
+        .facts div { min-width: 0; }
+        .facts dt { color: var(--muted); font-size: 0.76rem; }
+        .facts dd { margin: 0.3rem 0 0; font-weight: 700; font-size: 0.9rem; overflow-wrap: anywhere; }
+        .notice {
+            padding: 1rem 1.25rem; margin: 0 0 1.6rem; border: 1px solid var(--line);
+            border-radius: 0.7rem; background: var(--surface); color: var(--muted); font-size: 0.86rem;
+        }
+        .notice strong { color: var(--ink); }
+        section.step {
+            padding: 1.35rem 1.5rem; margin-bottom: 1.1rem;
+            border: 1px solid var(--line); border-radius: 0.9rem; background: var(--surface);
+        }
+        .step-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1.2rem; }
+        .step-head p { margin: 0.35rem 0 0; color: var(--muted); font-size: 0.85rem; }
+        .filename { color: var(--muted); font-size: 0.76rem; white-space: nowrap;
+                    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+        pre {
+            margin: 1rem 0 0; padding: 1.05rem 1.15rem; border-radius: 0.6rem;
+            background: #10251f; color: #dff0eb; overflow-x: auto;
+            font-size: 0.82rem; line-height: 1.6;
+        }
+        pre code { color: inherit; }
+        ul { margin: 0.8rem 0 0; padding-left: 1.2rem; font-size: 0.9rem; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: 0.86rem; }
+        th, td { padding: 0.7rem 0.8rem; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+        th { color: var(--muted); font-size: 0.74rem; }
+        tr:last-child td { border-bottom: none; }
+        footer { margin-top: 2.5rem; padding-top: 1.2rem; border-top: 1px solid var(--line);
+                 color: var(--muted); font-size: 0.78rem; }
+        @media print {
+            body { background: #fff; padding: 0; }
+            section.step, .facts { break-inside: avoid; }
+        }
+    </style>
+</head>
+<body>
+<main>
+    <h1 th:text="${guide.name()} + ' 对接说明'">住院系统 对接说明</h1>
+    <p class="lead">
+        医共体统一身份认证 · 本文所有参数已按该系统实际登记值填好，直接复制到项目里即可。
+        <span class="badge" th:text="${guide.stackLabel()}">标准接入</span>
+    </p>
+
+    <dl class="facts">
+        <div>
+            <dt>系统编码（Client ID）</dt>
+            <dd><code th:text="${guide.clientId()}">his-web</code></dd>
+        </div>
+        <div>
+            <dt>接入方式</dt>
+            <dd th:text="${guide.stackLabel()}">标准接入 · JDK 17</dd>
+        </div>
+        <div>
+            <dt>统一认证地址（Issuer）</dt>
+            <dd><code th:text="${guide.issuerUri()}">https://sso.intra.example/auth/realms/medical</code></dd>
+        </div>
+        <div>
+            <dt>系统访问地址</dt>
+            <dd><code th:text="${guide.baseUrl() ?: '-'}">https://his.intra.example</code></dd>
+        </div>
+        <div>
+            <dt>回调地址（已在平台登记）</dt>
+            <dd><code th:text="${guide.redirectUri()}">https://his.intra.example/login/oauth2/code/medical-sso</code></dd>
+        </div>
+    </dl>
+
+    <!-- 导出件绝不含 Secret：它在平台上只展示一次，且这份文件会在邮件和聊天工具里流转。 -->
+    <div class="notice">
+        <strong>Client Secret 不在本文中。</strong>
+        配置片段里的 client-secret 是环境变量占位符，真实值由认证平台管理员通过安全渠道单独交付，
+        请存入你们的密钥系统，不要写进代码库、日志或本文件。
+    </div>
+
+    <section class="step" th:each="snippet : ${guide.snippets()}">
+        <div class="step-head">
+            <div>
+                <h2 th:text="${snippet.title()}">配置</h2>
+                <p th:text="${snippet.hint()}">说明</p>
+            </div>
+            <span class="filename" th:if="${!snippet.filename().isEmpty()}"
+                  th:text="${snippet.filename()}">application.yml</span>
+        </div>
+        <pre><code th:text="${snippet.content()}">code</code></pre>
+    </section>
+
+    <section class="step">
+        <h2 th:text="${#lists.size(guide.snippets()) + 1} + '. 分配访问角色'">6. 分配访问角色</h2>
+        <p style="margin:0.35rem 0 0;color:var(--muted);font-size:0.85rem;">
+            接入代码就绪后，还要由认证平台管理员给使用者分配本系统的 <code>access</code> 角色，否则登录后会返回 403。
+        </p>
+        <ul>
+            <li>本系统的 <code>access</code> 角色已由平台自动创建，不需要手工新建。</li>
+            <li>管理员在「授权中心」为需要使用本系统的人员勾选
+                <span th:text="${guide.name()}">住院系统</span>，即完成授权。</li>
+            <li>系统内部的菜单、岗位和数据权限仍由你们自己管理，按 <code>personId</code> 关联本地用户。</li>
+        </ul>
+    </section>
+
+    <section class="step">
+        <h2 th:text="${#lists.size(guide.snippets()) + 2} + '. 配完进不去，先看这三条'">7. 配完进不去</h2>
+        <p style="margin:0.35rem 0 0;color:var(--muted);font-size:0.85rem;">
+            下面三条覆盖了绝大多数「配置都对却登不进去」。仍未解决时，请联系认证平台管理员在平台上运行一次「接入自检」。
+        </p>
+        <table>
+            <thead>
+            <tr><th>症状</th><th>多半是什么原因</th><th>怎么改</th></tr>
+            </thead>
+            <tbody>
+            <tr>
+                <td>登录后一直跳回登录页</td>
+                <td>服务端拼出来的回调地址与登记值对不上</td>
+                <td>登记值是 <code th:text="${guide.redirectUri()}">…</code>；
+                    确认浏览器访问的域名与协议和它完全一致，且应用配了
+                    <code>forward-headers-strategy: framework</code></td>
+            </tr>
+            <tr>
+                <td>能登录，但进去就是 403</td>
+                <td>这个人没有本系统的 <code>access</code> 角色</td>
+                <td>请管理员在「授权中心」给他勾选
+                    <span th:text="${guide.name()}">本系统</span></td>
+            </tr>
+            <tr>
+                <td>能进去，但拿不到工号／机构／科室</td>
+                <td>身份字段没下发，或取值方式不对</td>
+                <td>请管理员运行「接入自检」，其中「下发人员身份字段」一项会直接报出来；
+                    已通过则检查你们取用户的代码</td>
+            </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <footer>
+        <div>医共体统一身份认证平台 · 由平台按该系统登记信息自动生成</div>
+        <div>生成时间：<span th:text="${generatedAt}">2026-09-03 17:30:00</span></div>
+    </footer>
+</main>
+</body>
+</html>

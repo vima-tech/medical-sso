@@ -4,17 +4,50 @@
 
 ## 项目组成
 
-| 目录 | 用途 |
+仓库按「这东西给谁用」分三层，不按技术栈分。**七个 Maven 模块里只有一个进生产镜像**，
+其余要么是交付给子系统的组件，要么是文档的配套样例：
+
+| 目录 | 是什么 | 进生产吗 |
+| --- | --- | --- |
+| `platform/portal` | **统一身份管理平台**，本项目的产品本体。机构科室、人员、授权中心、业务系统登记、对接文档生成、审计记录都在这里 | ✅ 唯一进镜像的应用 |
+| `integration/starter-boot3` | 接入组件，Spring Boot 3.x / JDK 17+ | 交付给子系统，自身不部署 |
+| `integration/starter-boot2` | 接入组件，Spring Boot 2.3-2.7 / JDK 8。子系统以这一套为主 | 交付给子系统，自身不部署 |
+| `integration/access-proxy` | 接入网关，替改不动的系统完成登录，身份以请求头注入，业务系统零改动 | 交付给子系统，自身不部署 |
+| `samples/boot3` | 标准接入最小示例（JDK 17），含页面和 `/api/me` | 仅文档配套 |
+| `samples/boot2` | 标准接入最小示例（JDK 8） | 仅文档配套 |
+| `samples/legacy` | 已有账号体系的桥接示例：保留原登录，支持自助绑定 | 仅文档配套 |
+| `deploy/` | 运行时资产：compose 编排、镜像定义、Realm 初始化数据、登录主题、网关配置、`.env` 模板 | — |
+| `docs/` | 接入、管理员操作、生产部署文档 | — |
+| `scripts/` | 脚本，按用途分三类，见下表 | — |
+
+`samples/` 三个模块加起来不到 900 行，就是 `docs/INTEGRATION.md` 里「完整可运行代码见 XXX」
+指向的那份代码，同时充当两套接入组件的集成验证。它们不进任何部署产物。
+
+> **目录名和 Maven 坐标是两回事。** `integration/starter-boot3` 的 artifactId 仍然是
+> `medical-sso-spring-boot-starter`，`samples/boot3` 仍然是 `medical-sso-demo`。
+> 子系统 pom 里写的是坐标，不受仓库目录调整影响。
+>
+> 唯一改过坐标的是接入网关：`medical-sso-gateway` → `medical-sso-access-proxy`，
+> 为的是和 `deploy/compose.yml` 里那个 nginx 的 `gateway` 服务区分开——后者是整套平台
+> 对外的唯一入口，两者毫无关系。请求头 `X-Medical-Gateway-Token`、配置前缀
+> `medical.sso.gateway.*` 是与已接入子系统的线上契约，**没有**随改名变动。
+
+### 脚本一览
+
+`scripts/` 根下只放**日常入口**，其余按用途分目录。绝大多数人只会用到第一行：
+
+| 脚本 | 什么时候用 |
 | --- | --- |
-| `deploy/keycloak` | Realm 初始化数据，以及完全自定义的登录主题（模板、文案、样式） |
-| `medical-sso-spring-boot-starter` | 接入组件，Spring Boot 3.x / JDK 17+ |
-| `medical-sso-spring-boot2-starter` | 接入组件，Spring Boot 2.3-2.7 / JDK 8 |
-| `medical-sso-gateway` | 接入网关，替改不动的系统完成登录，身份以请求头注入，业务系统零改动 |
-| `medical-portal` | 统一身份管理平台，含业务系统登记、对接文档生成与接入自检 |
-| `medical-sso-demo` | 子系统最小接入示例（JDK 17），包含页面和 `/api/me` |
-| `medical-sso-demo-boot2` | 子系统最小接入示例（JDK 8） |
-| `medical-sso-demo-legacy` | 已有账号体系的接入示例：保留原登录，桥接统一身份，支持自助绑定 |
-| `docs` | 接入、管理员操作和生产部署文档 |
+| `scripts/sso.sh` / `sso.ps1` | **日常唯一入口**：`start` / `stop` / `status` / `logs`。Windows 双击根目录两个 `.cmd` 即可 |
+| `scripts/demo/start-local.sh` | 跑带四个示例子系统的完整演示环境（开发者看接入效果用，仅 Linux / macOS） |
+| `scripts/demo/seed-demo.sh` | 装载演示机构、人员和业务系统。对非 `localhost` 地址会直接拒绝，**生产禁用** |
+| `scripts/demo/upstream.py` | 演示用的假上游，配合接入网关演示「改不动的系统」 |
+| `scripts/release/check-release.sh` | 发布门禁，CI 每次推送都跑：脏工作树、SNAPSHOT、脚本语法、compose 配置、全量测试 |
+| `scripts/release/preflight-production.sh` | 生产预检：必填项、密码长度、证书可读、生产 Realm 已生成 |
+| `scripts/release/render-production-realm.sh` | 把真实 Secret 注入 Realm，生成生产导入文件 |
+| `scripts/release/smoke-test.sh` | 上线后冒烟，含管理控制台防枚举断言 |
+| `scripts/release/backup-postgres.sh` / `restore-postgres.sh` | 生产库备份与恢复（恢复强制 `--confirm`） |
+| `scripts/lib/*.sh` | 被上面这些 `source` 的共用片段，**不要直接执行** |
 
 ## 子系统怎么接入
 
@@ -49,7 +82,9 @@
 | Windows | 双击仓库根目录的 **`启动平台.cmd`** |
 | Linux / macOS | 终端执行 **`./scripts/sso.sh start`** |
 
-第一次启动要构建平台镜像，约几分钟；以后每次都是秒级。看到「统一身份认证平台已就绪」就成了。
+第一次启动要构建平台镜像，约几分钟；之后只要没改过仓库里的文件，重启都是秒级。看到「统一身份认证平台已就绪」就成了。
+
+（改过代码或文档后，下次启动会重新构建镜像，又要几分钟——这是正常的，不是卡住了。）
 
 ### 第三步：第一次登录
 
@@ -84,18 +119,14 @@ Windows 上对应 `.\scripts\sso.ps1 status` 和 `.\scripts\sso.ps1 logs`。
 
 **日常只需要这一个脚本。** 底下跑着数据库、认证内核、网关和管理平台四个容器，但运维不需要知道它们各自叫什么。
 
+编排文件放在 `deploy/` 下，所以在仓库根目录直接敲 `docker compose up` 是找不到它的。
+要手工调用就显式指定：`docker compose -f deploy/compose.yml ...`。
+
 ### 需要改配置吗？
 
-第一次启动会自动生成 `.env`。**本地试用什么都不用改。** 正式上线前必须改的只有四项，`.env` 里都有注释说明：
+**本地试用不用改任何东西。** 第一次启动会自动从 `deploy/.env.example` 生成 `deploy/.env`，里面的密码都是演示用的默认值，直接能跑。
 
-| 配置项 | 改成什么 |
-| --- | --- |
-| `SSO_PLATFORM_ADMIN_PASSWORD` | 平台管理员密码 |
-| `KC_BOOTSTRAP_ADMIN_PASSWORD` | 认证内核引导管理员密码 |
-| `POSTGRES_PASSWORD` | 数据库密码 |
-| `SSO_PUBLIC_URL` | 对外访问地址，例如 `https://sso.intra.example` |
-
-完整的上线清单见[生产部署与安全清单](docs/DEPLOYMENT.md)。
+正式上线是另一套配置文件（`deploy/.env.production`），密码、域名、证书都必须换成真实值，一项都不能省——生产编排会逐项校验，缺哪项就报哪项。详见[生产部署与安全清单](docs/DEPLOYMENT.md)。
 
 ## 跑完整演示环境
 
@@ -104,8 +135,8 @@ Windows 上对应 `.\scripts\sso.ps1 status` 和 `.\scripts\sso.ps1 logs`。
 想看四种接入方式的实际效果，可以跑完整演示——它会额外装载演示数据，并在宿主机上拉起四个示例子系统。**这一步是给开发者看接入效果的，额外需要 Java 17、Maven 3.9+ 和 python3，且目前只支持 Linux / macOS：**
 
 ```bash
-chmod +x scripts/*.sh
-./scripts/start-local.sh
+chmod +x scripts/*.sh scripts/demo/*.sh scripts/release/*.sh
+./scripts/demo/start-local.sh
 ```
 
 启动后访问：
@@ -118,21 +149,21 @@ chmod +x scripts/*.sh
 | 已有登录体系（桥接模式） | http://localhost:8084 |
 | 改不动的系统（接入网关） | http://localhost:8085 |
 
-演示环境里 `sso-admin` 的密码取自 `.env` 的 `SSO_PLATFORM_ADMIN_PASSWORD`，并且**不强制改密**，方便反复演示。演示人员用 `zhangsan / Demo@123456`。
+演示环境里 `sso-admin` 的密码取自 `deploy/.env` 的 `SSO_PLATFORM_ADMIN_PASSWORD`，并且**不强制改密**，方便反复演示。演示人员用 `zhangsan / Demo@123456`。
 
 停止四个示例子系统在启动终端按 `Ctrl+C`，停止平台用 `./scripts/sso.sh stop`。
 
 **对外只有 18081 这一个端口。** 认证内核 Keycloak 不映射任何宿主端口，浏览器经网关的 `/auth` 前缀访问它的登录页；它自带的管理控制台已用 `--features-disabled=admin` 在引擎层面关闭，不存在第二个管理入口。
 
-Realm 导入文件是**生产就绪**的：只有平台管理员和平台自身的客户端，没有演示人员、演示业务系统和机构骨架。演示数据由 `scripts/seed-demo.sh` 单独装载，`start-local.sh` 会自动执行；**上线时不要执行该脚本**。
+Realm 导入文件是**生产就绪**的：只有平台管理员和平台自身的客户端，没有演示人员、演示业务系统和机构骨架。演示数据由 `scripts/demo/seed-demo.sh` 单独装载，`scripts/demo/start-local.sh` 会自动执行；**上线时不要执行该脚本**。
 
 ### 三个账号，用途完全不同，不要混用
 
 | 账号 | 登录哪里 | 用途 |
 | --- | --- | --- |
-| `sso-admin` | 统一身份管理平台 http://localhost:18081 | **平台管理员**。初始密码 `Admin@123456`，首次登录强制改密；演示环境改用 `.env` 里的密码且不强制改密 |
+| `sso-admin` | 统一身份管理平台 http://localhost:18081 | **平台管理员**。初始密码 `Admin@123456`，首次登录强制改密；演示环境改用 `deploy/.env` 里的密码且不强制改密 |
 | `zhangsan / Demo@123456` | 应用门户和各业务系统 | **演示医生**，仅由 `seed-demo.sh` 装载，生产环境不存在 |
-| `.env` 里的 `KC_BOOTSTRAP_ADMIN_*` | 无图形界面可登录 | **引导管理员**，只存在于 `master` Realm，仅供底层排查 |
+| `deploy/.env` 里的 `KC_BOOTSTRAP_ADMIN_*` | 无图形界面可登录 | **引导管理员**，只存在于 `master` Realm，仅供底层排查 |
 
 引导管理员没有界面可登：Keycloak 控制台已关闭，在业务登录页上用它也一定登不进去，会提示「工号或密码错误」——这是预期行为，它不是业务账号。日常运维一律用 `sso-admin`。
 
@@ -207,9 +238,11 @@ Keycloak 只作为认证内核运行在后台，其自带控制台仅用于引�
 
 ## 文档入口
 
-- [Spring Boot 完整接入文档](docs/INTEGRATION.md)
-- [用户、机构、科室和角色管理](docs/ADMIN-GUIDE.md)
-- [生产部署与安全清单](docs/DEPLOYMENT.md)
+- [Spring Boot 完整接入文档](docs/INTEGRATION.md) —— 四种接入方式的完整说明与代码
+- [用户、机构、科室和角色管理](docs/ADMIN-GUIDE.md) —— 管理员日常操作
+- [生产部署与安全清单](docs/DEPLOYMENT.md) —— 上线拓扑、安全边界、必填配置
+- [发布、备份与回滚](docs/RELEASE.md) —— 交付候选的发布步骤与回滚预案
+- [Sustain 接入实施方案](docs/SUSTAIN-ONBOARDING.md) —— 具体子系统的桥接模式落地样板，可作为同类系统的参考
 
 ## 验证
 
@@ -217,8 +250,8 @@ Keycloak 只作为认证内核运行在后台，其自带控制台仅用于引�
 mvn -Dmaven.repo.local=.m2/repository test
 ```
 
-交付候选还应执行 `./scripts/check-release.sh`；本地未提交改动可用
-`./scripts/check-release.sh --allow-dirty` 做同等构建检查。生产部署、备份恢复、验证和回滚步骤见
+交付候选还应执行 `./scripts/release/check-release.sh`；本地未提交改动可用
+`./scripts/release/check-release.sh --allow-dirty` 做同等构建检查。生产部署、备份恢复、验证和回滚步骤见
 [Release Package](docs/RELEASE.md)。
 
-当前 `compose.yml` 使用开发模式和演示密钥，只用于本机或隔离测试网。生产部署必须按照部署文档替换。
+当前 `deploy/compose.yml` 使用开发模式和演示密钥，只用于本机或隔离测试网。生产部署必须按照部署文档替换。

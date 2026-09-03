@@ -29,6 +29,20 @@ $ErrorActionPreference = 'Stop'
 $ProjectDir = Split-Path -Parent $PSScriptRoot
 Set-Location $ProjectDir
 
+# compose 文件与本机 .env 都在 deploy\ 下，所以每次调用都要显式 -f 指定，
+# 不能再依赖「在仓库根目录敲 docker compose 就能找到 compose.yml」。
+$ComposeFile = Join-Path $ProjectDir 'deploy\compose.yml'
+$EnvFile     = Join-Path $ProjectDir 'deploy\.env'
+$EnvExample  = Join-Path $ProjectDir 'deploy\.env.example'
+
+# .env 还不存在时不能传 --env-file：compose 对指定却不存在的 env 文件直接报错，
+# 而 status / logs 在没有 .env 的情况下也应该能跑。
+function Get-ComposeArgs {
+    $composeArgs = @('-f', $ComposeFile)
+    if (Test-Path $EnvFile) { $composeArgs = @('--env-file', $EnvFile) + $composeArgs }
+    return $composeArgs
+}
+
 function Get-ComposeCommand {
     if (Get-Command docker -ErrorAction SilentlyContinue) { return @('docker', 'compose') }
     if (Get-Command podman -ErrorAction SilentlyContinue) { return @('podman', 'compose') }
@@ -41,8 +55,8 @@ function Get-ComposeCommand {
 }
 
 function Get-DotEnvValue([string]$Key) {
-    if (-not (Test-Path '.env')) { return $null }
-    foreach ($line in Get-Content '.env' -Encoding UTF8) {
+    if (-not (Test-Path $EnvFile)) { return $null }
+    foreach ($line in Get-Content $EnvFile -Encoding UTF8) {
         $trimmed = $line.Trim()
         if ($trimmed.StartsWith("$Key=")) {
             return $trimmed.Substring($Key.Length + 1).Trim()
@@ -71,19 +85,29 @@ function Test-PlatformReady([string]$Url) {
     }
 }
 
+# 先校验子命令再探测容器运行时：敲错命令时该看到用法，而不是「没装 Docker」
+if ($Command -notin @('start', 'stop', 'status', 'logs')) {
+    Write-Host "用法：.\scripts\sso.ps1 {start|stop|status|logs [服务名]}"
+    exit 1
+}
+
 $compose = Get-ComposeCommand
 $exe = $compose[0]
 $sub = $compose[1]
 
 switch ($Command) {
     'start' {
-        if (-not (Test-Path '.env')) {
-            Copy-Item '.env.example' '.env'
-            Write-Host "已从 .env.example 创建 .env。演示环境可直接使用，正式环境请先修改密码。" -ForegroundColor Yellow
+        if (-not (Test-Path $EnvFile)) {
+            Copy-Item $EnvExample $EnvFile
+            Write-Host "已从 deploy\.env.example 创建 deploy\.env。演示环境可直接使用，正式环境请先修改密码。" -ForegroundColor Yellow
         }
 
         Write-Host "启动中（首次会构建平台镜像，需要几分钟，请耐心等待）..." -ForegroundColor Cyan
-        & $exe $sub up -d --build
+        $composeArgs = Get-ComposeArgs
+        # --force-recreate 不能省：compose 在镜像重建后不一定重建已存在的容器，
+        # 于是「改完代码再 start」跑的仍是上一版镜像，界面看不到任何变化。
+        # 多花的时间只是容器重建，数据都在卷里。
+        & $exe $sub @composeArgs up -d --build --force-recreate
         if ($LASTEXITCODE -ne 0) {
             Write-Host "容器启动失败。Docker Desktop 是否已经启动？" -ForegroundColor Red
             exit 1
@@ -107,12 +131,14 @@ switch ($Command) {
     }
 
     'stop' {
-        & $exe $sub down
+        $composeArgs = Get-ComposeArgs
+        & $exe $sub @composeArgs down
         exit $LASTEXITCODE
     }
 
     'status' {
-        & $exe $sub ps
+        $composeArgs = Get-ComposeArgs
+        & $exe $sub @composeArgs ps
         Write-Host ""
         $url = Get-PublicUrl
         if (Test-PlatformReady $url) {
@@ -124,7 +150,8 @@ switch ($Command) {
     }
 
     'logs' {
-        if ($Rest) { & $exe $sub logs -f @Rest } else { & $exe $sub logs -f }
+        $composeArgs = Get-ComposeArgs
+        if ($Rest) { & $exe $sub @composeArgs logs -f @Rest } else { & $exe $sub @composeArgs logs -f }
         exit $LASTEXITCODE
     }
 

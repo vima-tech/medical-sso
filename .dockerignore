@@ -3,6 +3,10 @@
 .git
 .m2
 **/target
-!medical-portal/target/
-!medical-portal/target/medical-portal-0.1.0.jar
-.env
+
+# 真实密钥绝不能进构建上下文：Containerfile 里是 COPY . .，
+# 进了上下文就会落进构建阶段的镜像层。
+# 注意必须写成 **/.env——.dockerignore 按完整相对路径匹配，
+# 光写 .env 只能排除仓库根目录那一个，排不掉 deploy/.env。
+**/.env
+**/.env.production

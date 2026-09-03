@@ -19,13 +19,18 @@
     <description>医共体统一身份认证接入示例</description>
 
     <modules>
-        <module>medical-sso-spring-boot-starter</module>
-        <module>medical-sso-spring-boot2-starter</module>
-        <module>medical-portal</module>
-        <module>medical-sso-demo</module>
-        <module>medical-sso-demo-boot2</module>
-        <module>medical-sso-demo-legacy</module>
-        <module>medical-sso-gateway</module>
+        <!-- 平台本体：唯一进生产镜像的应用 -->
+        <module>platform/portal</module>
+
+        <!-- 接入组件：交付给子系统使用，不部署 -->
+        <module>integration/starter-boot3</module>
+        <module>integration/starter-boot2</module>
+        <module>integration/access-proxy</module>
+
+        <!-- 可运行样例：docs/INTEGRATION.md 的配套代码，不部署 -->
+        <module>samples/boot3</module>
+        <module>samples/boot2</module>
+        <module>samples/legacy</module>
     </modules>
 
     <properties>

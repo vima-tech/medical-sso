@@ -1,6 +1,6 @@
 # 生产部署与安全清单
 
-`compose.yml` 是开发环境，不可原样用于生产。生产环境至少包含反向代理或负载均衡器、Keycloak、PostgreSQL、备份和监控。
+生产用 `deploy/compose.prod.yml`，不要用 `deploy/compose.yml`——后者是本机开发环境。两者都是四个容器（PostgreSQL、Keycloak、网关、统一身份管理平台），差别在于生产走 HTTPS、强制配置密码、并使用单独生成的 Realm。完整发布步骤见 [Release Package](RELEASE.md)。
 
 ## 推荐拓扑
 
@@ -18,26 +18,38 @@ HTTPS 统一域名（唯一对外入口）
 
 认证内核不对外暴露端口，只能经反向代理的 `/auth` 前缀访问；其自带管理控制台已在引擎层面关闭，生产同样不得开启。
 
-四个核心容器（PostgreSQL、Keycloak、网关、统一身份管理平台）由 `compose.yml` 统一定义，本机与生产是同一套拓扑，只有镜像标签、密码和对外地址不同。**只有网关映射宿主端口**，另外三个容器都不对外可达。
+**只有网关映射宿主端口**，另外三个容器都不对外可达。
 
-统一身份管理平台与网关共享网络命名空间（`network_mode: service:gateway`）。这不是随手写的耦合，是 issuer 逼出来的：令牌里的 `iss` 是对外地址，平台做 OIDC discovery 必须用同一个字面地址去请求，否则 `iss` 校验通不过；共享命名空间后容器内的 `localhost:18081` 就是网关，网关也用 `127.0.0.1:18082` 回连平台。代价是平台不能有自己的 `ports`，而这正是我们要的——平台既不占宿主端口，也不在容器网络上暴露。
+部署机**只需要容器运行时**，不需要装 JDK 和 Maven：平台镜像按 `deploy/Containerfile` 多阶段构建，Maven 只存在于构建阶段，不进运行镜像。本机和生产用的是同一个 Containerfile。仓库里的四个演示子系统不参与生产部署，也不进镜像。
 
-生产机因此**只需要容器运行时**，不需要装 JDK 和 Maven：平台镜像按 `medical-portal/Dockerfile` 多阶段构建，构建阶段的 Maven 不进运行镜像。仓库里的四个演示子系统不参与生产部署，也不进镜像。
+### 本机与生产在网络上有一处不同
+
+生产环境（`deploy/compose.prod.yml`）里平台是一个普通服务，网关按容器名 `portal:8080` 访问它——这是标准做法，因为生产的对外地址是真实域名，平台容器能通过内网 DNS 解析到它，`iss` 校验自然通过。
+
+本机（`deploy/compose.yml`）做不到这一点：对外地址是 `http://localhost:18081`，而容器里的 `localhost` 指向容器自己。令牌里的 `iss` 是对外地址，平台做 OIDC discovery 必须用同一个字面地址去请求，否则校验通不过。所以本机让平台与网关共享网络命名空间（`network_mode: service:gateway`），这样容器内的 `localhost:18081` 就是网关，网关也用 `127.0.0.1:18082` 回连平台。
+
+这个差异只影响本机，不要把 `network_mode: service:gateway` 搬进生产编排。
 
 首期用户规模较小时可以单 Keycloak 节点，但数据库必须备份。认证中断会影响所有接入系统，新系统正式推广前建议升级为双节点。
 
-## 最少要改的四项
+## 生产配置：没有「可以先不填」的项
 
-下面「必须修改」一节是完整清单，但如果只想先跑起一个可用的内网环境，`.env` 里至少要改这四项：
+生产用的是 `deploy/.env.production`（模板 `deploy/.env.production.example`），**不是**本机那个 `deploy/.env`，变量名也不完全相同——本机用 `SSO_PUBLIC_URL`（含协议和端口），生产用 `SSO_HOSTNAME`（只填域名，例如 `sso.intra.example`，协议固定 HTTPS）。
 
-| 配置项 | 改成什么 |
+`deploy/compose.prod.yml` 对每一项都写了 `${VAR:?}`，缺一项就直接启动失败并指名是哪一项。这是刻意的：生产环境不存在「先用默认值跑起来再说」。需要填的是：
+
+| 配置项 | 填什么 |
 | --- | --- |
-| `SSO_PUBLIC_URL` | 对外访问地址，例如 `https://sso.intra.example`。认证内核签发的 issuer 由它推导，必须与浏览器实际访问的地址逐字一致 |
-| `SSO_PLATFORM_ADMIN_PASSWORD` | 平台管理员密码 |
-| `KC_BOOTSTRAP_ADMIN_PASSWORD` | 认证内核引导管理员密码 |
+| `SSO_HOSTNAME` | 对外域名，只填主机名。认证内核签发的 issuer 由它推导，必须与浏览器实际访问的地址一致 |
 | `POSTGRES_PASSWORD` | 数据库密码 |
+| `KC_BOOTSTRAP_ADMIN_USERNAME` / `KC_BOOTSTRAP_ADMIN_PASSWORD` | 认证内核引导管理员 |
+| `SSO_PLATFORM_ADMIN_PASSWORD` | 平台管理员初始密码，首次登录强制改 |
+| `SSO_ADMIN_CLIENT_SECRET` | 平台调用 Admin API 的服务账号 Secret |
+| `SSO_PORTAL_CLIENT_SECRET` | 平台自身参与统一登录的客户端 Secret，必须与上一项不同 |
+| `TLS_CERT_FILE` / `TLS_KEY_FILE` | 证书和私钥的绝对路径 |
+| `REALM_IMPORT_DIR` | `render-production-realm.sh` 生成的 Realm 目录绝对路径 |
 
-改完 `SSO_PUBLIC_URL` 后，`PLATFORM_PORT` 要与其中的端口一致。两个 Client Secret（`SSO_PORTAL_CLIENT_SECRET`、`SSO_ADMIN_CLIENT_SECRET`）也必须换成新生成的值并交由密钥系统注入，只是它们不影响「能不能跑起来」，所以没列进这张表。
+填完先跑 `./scripts/release/preflight-production.sh` 自检（默认读 `deploy/.env.production`），再按 [Release Package](RELEASE.md) 的步骤发布。
 
 ## 必须修改
 
@@ -106,7 +118,7 @@ Could not find artifact com.medical.union:medical-sso:pom:0.1.0
 - 没有演示人员、演示业务系统，机构科室为空，由管理员在平台上自行建立
 - `sso-admin` 带 `UPDATE_PASSWORD`，首次登录必须改密
 
-演示数据由 `scripts/seed-demo.sh` 单独装载，本机 `start-local.sh` 会自动执行。**生产环境不要执行该脚本**；它对非 `localhost` 地址会直接拒绝，需要显式 `ALLOW_DEMO_SEED=yes` 才会继续。
+演示数据由 `scripts/demo/seed-demo.sh` 单独装载，本机 `scripts/demo/start-local.sh` 会自动执行。**生产环境不要执行该脚本**；它对非 `localhost` 地址会直接拒绝，需要显式 `ALLOW_DEMO_SEED=yes` 才会继续。
 
 这样安排的原因是失败方向：忘了执行播种脚本，得到的是一个干净的生产环境；反过来如果默认带演示数据、靠上线时手工删除，一旦漏删就是演示账号进生产。
 
@@ -147,7 +159,7 @@ Token 只承载完成认证和粗粒度授权所需字段。不要加入：身�
 - Keycloak 未映射任何对外端口，其管理控制台确认不可访问。
 - 统一身份管理平台自身端口只对反向代理开放，不直接暴露给用户网段。
 - 事件记录已开启，且管理事件未记录请求体。
-- 未执行 `scripts/seed-demo.sh`；确认 Realm 中不存在 `zhangsan`、`medical-demo`、`medical-demo-boot2`。
+- 未执行 `scripts/demo/seed-demo.sh`；确认 Realm 中不存在 `zhangsan`、`medical-demo`、`medical-demo-boot2`。
 - 平台管理员 `sso-admin` 已完成首次登录改密，或已改用真实管理员账号。
 - 所有应用使用 HTTPS 和精确回调地址。
 - 所有客户端强制 PKCE S256，且各子系统已显式开启，登录流验证通过。
@@ -164,15 +176,15 @@ Token 只承载完成认证和粗粒度授权所需字段。不要加入：身�
 
 ## 仓库内的生产基线
 
-仓库提供 `compose.prod.yml`、`.env.production.example`、生产 TLS 网关模板和管理平台镜像构建文件。它们的安全边界是：数据库、认证内核和管理平台均不映射宿主端口，只有 TLS 网关开放 80/443；生产启动使用 `start`，严格校验统一域名，继续关闭认证内核自带管理控制台。
+仓库提供 `deploy/compose.prod.yml`、`deploy/.env.production.example`、生产 TLS 网关模板和管理平台镜像构建文件。它们的安全边界是：数据库、认证内核和管理平台均不映射宿主端口，只有 TLS 网关开放 80/443；生产启动使用 `start`，严格校验统一域名，继续关闭认证内核自带管理控制台。
 
 ```bash
-cp .env.production.example .env.production
+cp deploy/.env.production.example deploy/.env.production
 # 填入真实域名、证书绝对路径和由密钥系统下发的密码/Secret
-./scripts/render-production-realm.sh .env.production
-./scripts/preflight-production.sh .env.production
-docker compose --env-file .env.production -f compose.prod.yml up -d --build
-./scripts/smoke-test.sh "https://你的统一身份域名"
+./scripts/release/render-production-realm.sh
+./scripts/release/preflight-production.sh
+docker compose --env-file deploy/.env.production -f deploy/compose.prod.yml up -d --build
+./scripts/release/smoke-test.sh "https://你的统一身份域名"
 ```
 
 `render-production-realm.sh` 会生成不入库的 Realm 文件，把平台管理员初始密码和两个客户端 Secret 写入一次性导入文件，并保持首次登录强制改密。已经存在的 Realm 不会被覆盖；存量环境应通过变更流程轮换 Secret，而不是重新导入。
@@ -180,8 +192,8 @@ docker compose --env-file .env.production -f compose.prod.yml up -d --build
 备份与恢复命令：
 
 ```bash
-./scripts/backup-postgres.sh
-./scripts/restore-postgres.sh backups/具体文件.sql.gz --confirm
+./scripts/release/backup-postgres.sh
+./scripts/release/restore-postgres.sh backups/具体文件.sql.gz --confirm
 ```
 
 恢复属于破坏性操作，只能在停止业务流量、保留当前库备份后执行。完成后必须跑冒烟测试和关键登录流程。
