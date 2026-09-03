@@ -21,7 +21,9 @@ jobs:
         run: ./scripts/check-release.sh
 
   dependency-review:
-    if: github.event_name == 'pull_request'
+    # 私有仓库没有 GitHub Advanced Security 时该 action 直接报错，
+    # 仓库转公开后才有意义，因此按可见性放行。
+    if: github.event_name == 'pull_request' && github.event.repository.visibility == 'public'
     runs-on: ubuntu-latest
     permissions:
       contents: read

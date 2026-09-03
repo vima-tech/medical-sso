@@ -4,7 +4,14 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # boot2 starter 固定在 Spring Boot 2.7.x（javax.servlet / JDK 8），
+      # boot3 侧的大版本跃迁同样需要人工评估，一律不自动提 PR。
+      - dependency-name: org.springframework.boot:spring-boot-starter-parent
+        update-types: ["version-update:semver-major"]
+  # 根目录没有 Dockerfile，只有 medical-portal 下这一个；
+  # deploy/Containerfile 不是 Dependabot 识别的文件名，不纳入。
   - package-ecosystem: docker
-    directory: /
+    directory: /medical-portal
     schedule:
       interval: weekly

@@ -1,18 +1,22 @@
-# 显式给出各端点，避免测试启动时去连真实 Keycloak 拉取 issuer 元数据
+# 测试上下文不得连真实 Keycloak。主配置的 medical-sso provider 带 issuer-uri，
+# profile 合并不会删掉它，只要 registration 仍指向它，Spring Boot 就会去拉
+# .well-known 元数据——本机恰好跑着平台时看不出来，CI 上必然连接被拒。
+# 因此这里把 registration 改指向一个只有显式端点、没有 issuer-uri 的 provider；
+# 未被 registration 引用的 provider，Spring Boot 不会解析。
 spring:
   security:
     oauth2:
       client:
         registration:
           medical-sso:
-            provider: medical-sso
+            provider: medical-sso-test
             client-id: medical-portal
             client-secret: test-secret
             authorization-grant-type: authorization_code
             scope: openid,profile
             redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
         provider:
-          medical-sso:
+          medical-sso-test:
             authorization-uri: http://sso.test/realms/medical/protocol/openid-connect/auth
             token-uri: http://sso.test/realms/medical/protocol/openid-connect/token
             user-info-uri: http://sso.test/realms/medical/protocol/openid-connect/userinfo
