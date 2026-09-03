@@ -3,6 +3,7 @@
 <head th:replace="~{admin/shell :: head('授权中心')}"></head>
 <body>
 <div th:replace="~{admin/shell :: nav('authorizations')}"></div>
+<div th:replace="~{admin/shell :: confirm}"></div>
 
 <main class="admin-main">
     <div th:replace="~{admin/shell :: flash}"></div>
@@ -10,8 +11,10 @@
     <section class="admin-heading">
         <div>
             <h1>授权中心</h1>
-            <p>一屏看清谁能进哪些业务系统。勾选后保存即可生效；点列头可整列全选，用于按科室批量授权。</p>
+            <p>查看人员可访问的业务系统。勾选后保存即可生效；点列头可批量选择当前页人员。</p>
         </div>
+        <button class="primary-button" type="submit" form="authorization-form"
+                th:if="${!#lists.isEmpty(matrix.rows()) and !#lists.isEmpty(matrix.systems())}">保存授权</button>
     </section>
 
     <form class="searchbar" method="get" th:action="@{/admin/authorizations}">
@@ -26,13 +29,19 @@
                 </optgroup>
             </th:block>
         </select>
-        <span class="result-count" th:text="'共 ' + ${#lists.size(matrix.rows())} + ' 人 · ' + ${#lists.size(matrix.systems())} + ' 个业务系统'">
+        <span class="result-count" th:text="'共 ' + ${total} + ' 人 · ' + ${#lists.size(matrix.systems())} + ' 个业务系统'">
             共 0 人
         </span>
     </form>
 
-    <form method="post" th:action="@{/admin/authorizations}">
+    <form id="authorization-form" method="post" th:action="@{/admin/authorizations}">
         <input type="hidden" name="departmentId" th:value="${departmentId}">
+        <input type="hidden" name="page" th:value="${page}">
+
+        <p class="authorization-hint"
+           th:if="${!#lists.isEmpty(matrix.rows()) and !#lists.isEmpty(matrix.systems())}">
+            当前页显示 <strong th:text="${#lists.size(matrix.rows())}">20</strong> 人，保存只会调整本页人员的授权。
+        </p>
 
         <div class="matrix-wrap" th:if="${!#lists.isEmpty(matrix.rows()) and !#lists.isEmpty(matrix.systems())}">
             <table class="data-table matrix">
@@ -44,7 +53,7 @@
                     <th class="sys-col" th:each="sys : ${matrix.systems()}">
                         <span th:text="${sys.name()}">住院系统</span>
                         <button type="button" class="link-button col-toggle"
-                                th:attr="data-system=${sys.clientId()}">全选/全不选</button>
+                                th:attr="data-system=${sys.clientId()}">本页全选/取消</button>
                     </th>
                 </tr>
                 </thead>
@@ -77,15 +86,19 @@
             <p>换一个科室，或先在「人员管理」里建档。</p>
         </div>
 
-        <div class="form-actions" th:if="${!#lists.isEmpty(matrix.rows()) and !#lists.isEmpty(matrix.systems())}">
-            <span class="hint">只会调整当前页面上列出的人员，不影响其他科室。</span>
-            <button class="primary-button" type="submit">保存授权</button>
-        </div>
     </form>
+
+    <div class="pager" th:if="${total > pageSize}">
+        <a class="quiet-button" th:if="${page > 0}"
+           th:href="@{/admin/authorizations(departmentId=${departmentId}, page=${page - 1})}">上一页</a>
+        <span th:text="'第 ' + (${page} + 1) + ' / ' + ${totalPages} + ' 页'">第 1 / 1 页</span>
+        <a class="quiet-button" th:if="${hasNext}"
+           th:href="@{/admin/authorizations(departmentId=${departmentId}, page=${page + 1})}">下一页</a>
+    </div>
 </main>
 
 <script>
-    // 列头「全选/全不选」：按科室批量授权或收回
+    // 列头「本页全选/取消」：批量授权或收回当前页人员
     document.addEventListener('click', function (event) {
         var button = event.target.closest('.col-toggle');
         if (!button) {

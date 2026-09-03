@@ -13,7 +13,7 @@
 
     <groupId>com.medical.union</groupId>
     <artifactId>medical-sso</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>0.1.0</version>
     <packaging>pom</packaging>
     <name>medical-sso</name>
     <description>医共体统一身份认证接入示例</description>
@@ -24,6 +24,8 @@
         <module>medical-portal</module>
         <module>medical-sso-demo</module>
         <module>medical-sso-demo-boot2</module>
+        <module>medical-sso-demo-legacy</module>
+        <module>medical-sso-gateway</module>
     </modules>
 
     <properties>

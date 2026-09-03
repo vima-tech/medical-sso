@@ -22,10 +22,13 @@ public class SubsystemAdminController {
 
     private final SubsystemRegistry registry;
     private final IntegrationGuideFactory guides;
+    private final SubsystemDiagnostics diagnostics;
 
-    public SubsystemAdminController(SubsystemRegistry registry, IntegrationGuideFactory guides) {
+    public SubsystemAdminController(SubsystemRegistry registry, IntegrationGuideFactory guides,
+                                    SubsystemDiagnostics diagnostics) {
         this.registry = registry;
         this.guides = guides;
+        this.diagnostics = diagnostics;
     }
 
     @GetMapping
@@ -160,6 +163,18 @@ public class SubsystemAdminController {
             redirect.addFlashAttribute("error", ex.getMessage());
             return "redirect:/admin/subsystems/" + clientId;
         }
+    }
+
+    @GetMapping("/{clientId}/check")
+    String check(@PathVariable String clientId, Model model) {
+        Subsystem subsystem = registry.find(clientId);
+        if (subsystem == null) {
+            return "redirect:/admin/subsystems";
+        }
+        model.addAttribute("subsystem", subsystem);
+        model.addAttribute("report", diagnostics.run(clientId));
+        model.addAttribute("activeNav", "subsystems");
+        return "admin/subsystem-check";
     }
 
     @GetMapping("/{clientId}/guide")

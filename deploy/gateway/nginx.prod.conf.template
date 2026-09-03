@@ -1,0 +1,70 @@
+events {
+    worker_connections 2048;
+}
+
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+    server_tokens off;
+    access_log /dev/stdout combined;
+    error_log /dev/stderr warn;
+
+    upstream keycloak_backend {
+        server keycloak:8080;
+        keepalive 32;
+    }
+
+    upstream portal_backend {
+        server portal:8080;
+        keepalive 32;
+    }
+
+    server {
+        listen 80;
+        server_name ${SSO_HOSTNAME};
+        return 301 https://${SSO_HOSTNAME}$request_uri;
+    }
+
+    server {
+        listen 443 ssl;
+        server_name ${SSO_HOSTNAME};
+
+        ssl_certificate /etc/nginx/tls/tls.crt;
+        ssl_certificate_key /etc/nginx/tls/tls.key;
+        ssl_protocols TLSv1.2 TLSv1.3;
+        add_header X-Content-Type-Options nosniff always;
+        add_header X-Frame-Options SAMEORIGIN always;
+        add_header Referrer-Policy strict-origin-when-cross-origin always;
+
+        client_max_body_size 8m;
+        proxy_http_version 1.1;
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 30s;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Port 443;
+
+        location = /healthz {
+            proxy_pass http://portal_backend/actuator/health;
+        }
+
+        location /auth/realms/master/ {
+            return 404;
+        }
+
+        location /auth/admin/master/ {
+            return 404;
+        }
+
+        location /auth/ {
+            proxy_pass http://keycloak_backend;
+        }
+
+        location / {
+            proxy_pass http://portal_backend;
+        }
+    }
+}

@@ -1,0 +1,25 @@
+server:
+  port: ${LEGACY_PORT:8084}
+  forward-headers-strategy: framework
+
+spring:
+  application:
+    name: medical-sso-demo-legacy
+
+medical:
+  sso:
+    client-id: medical-demo-legacy
+    bridge:
+      enabled: true
+      issuer-uri: ${SSO_ISSUER:http://localhost:18081/auth/realms/medical}
+      client-secret: ${SSO_LEGACY_CLIENT_SECRET:demo-legacy-dev-secret}
+      base-url: ${LEGACY_BASE_URL:http://localhost:8084}
+      # 统一认证为主，本地账号收进「其他登录方式」
+      local-login: enabled
+      self-service-binding: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health

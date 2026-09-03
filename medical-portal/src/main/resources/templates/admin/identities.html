@@ -3,6 +3,7 @@
 <head th:replace="~{admin/shell :: head('通用身份')}"></head>
 <body>
 <div th:replace="~{admin/shell :: nav('identities')}"></div>
+<div th:replace="~{admin/shell :: confirm}"></div>
 
 <main class="admin-main narrow">
     <div th:replace="~{admin/shell :: flash}"></div>
@@ -37,7 +38,9 @@
             <td class="actions-col">
                 <span class="org-meta" th:if="${item.systemManaged()}">平台使用，不可删除</span>
                 <form th:unless="${item.systemManaged()}"
-                      th:action="@{'/admin/identities/' + ${item.name()} + '/delete'}" method="post" class="inline-form">
+                      th:action="@{'/admin/identities/' + ${item.name()} + '/delete'}" method="post" class="inline-form"
+                      th:attr="data-confirm='删除通用身份「' + ${item.name()} + '」后，已按该身份授权的人员会失去对应权限。此操作不可撤销。'"
+                      data-confirm-title="删除通用身份" data-confirm-ok="删除">
                     <button type="submit" class="link-button danger">删除</button>
                 </form>
             </td>

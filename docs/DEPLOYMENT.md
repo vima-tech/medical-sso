@@ -9,18 +9,35 @@
     |
 HTTPS 统一域名（唯一对外入口）
     |
-反向代理 / 负载均衡
-    |-- /auth/*  --> Keycloak 认证内核 1-2 节点
-    |-- /        --> 统一身份管理平台
+网关容器（反向代理 / 负载均衡）
+    |-- /auth/*  --> Keycloak 认证内核容器 1-2 节点
+    |-- /        --> 统一身份管理平台容器
                           |
                      生产 PostgreSQL
 ```
 
 认证内核不对外暴露端口，只能经反向代理的 `/auth` 前缀访问；其自带管理控制台已在引擎层面关闭，生产同样不得开启。
 
-本机开发环境有一处与生产不同：统一身份管理平台以 jar 形式跑在宿主机 `18082`，网关经 `host.containers.internal` 回连它，因此该端口监听在 `0.0.0.0` 而不是回环地址。生产环境应把平台也部署在反向代理之后的内网段，只由代理可达，不要照搬这一点。
+四个核心容器（PostgreSQL、Keycloak、网关、统一身份管理平台）由 `compose.yml` 统一定义，本机与生产是同一套拓扑，只有镜像标签、密码和对外地址不同。**只有网关映射宿主端口**，另外三个容器都不对外可达。
+
+统一身份管理平台与网关共享网络命名空间（`network_mode: service:gateway`）。这不是随手写的耦合，是 issuer 逼出来的：令牌里的 `iss` 是对外地址，平台做 OIDC discovery 必须用同一个字面地址去请求，否则 `iss` 校验通不过；共享命名空间后容器内的 `localhost:18081` 就是网关，网关也用 `127.0.0.1:18082` 回连平台。代价是平台不能有自己的 `ports`，而这正是我们要的——平台既不占宿主端口，也不在容器网络上暴露。
+
+生产机因此**只需要容器运行时**，不需要装 JDK 和 Maven：平台镜像按 `medical-portal/Dockerfile` 多阶段构建，构建阶段的 Maven 不进运行镜像。仓库里的四个演示子系统不参与生产部署，也不进镜像。
 
 首期用户规模较小时可以单 Keycloak 节点，但数据库必须备份。认证中断会影响所有接入系统，新系统正式推广前建议升级为双节点。
+
+## 最少要改的四项
+
+下面「必须修改」一节是完整清单，但如果只想先跑起一个可用的内网环境，`.env` 里至少要改这四项：
+
+| 配置项 | 改成什么 |
+| --- | --- |
+| `SSO_PUBLIC_URL` | 对外访问地址，例如 `https://sso.intra.example`。认证内核签发的 issuer 由它推导，必须与浏览器实际访问的地址逐字一致 |
+| `SSO_PLATFORM_ADMIN_PASSWORD` | 平台管理员密码 |
+| `KC_BOOTSTRAP_ADMIN_PASSWORD` | 认证内核引导管理员密码 |
+| `POSTGRES_PASSWORD` | 数据库密码 |
+
+改完 `SSO_PUBLIC_URL` 后，`PLATFORM_PORT` 要与其中的端口一致。两个 Client Secret（`SSO_PORTAL_CLIENT_SECRET`、`SSO_ADMIN_CLIENT_SECRET`）也必须换成新生成的值并交由密钥系统注入，只是它们不影响「能不能跑起来」，所以没列进这张表。
 
 ## 必须修改
 
@@ -49,22 +66,37 @@ HTTPS 统一域名（唯一对外入口）
 **`--import-realm` 不会覆盖已存在的 Realm。** 数据卷里已经有 `medical` 时，Keycloak 直接跳过导入，改了 `medical-realm.json` 也不会生效，而且不报错。表现是「配置明明改了却没变化」。要让改动生效，只能清掉数据卷重新导入，或用 Admin API 删除该 Realm 后按 JSON 重建：
 
 ```bash
-./scripts/stop-local.sh              # 停止容器
+./scripts/sso.sh stop                            # 停止容器
 docker volume rm medical-sso_keycloak-postgres   # 清掉数据卷，容器名前缀按实际项目名
-./scripts/start-local.sh             # 重新导入
+./scripts/sso.sh start                           # 重新导入
 ```
 
 **Realm JSON 里的 `clientScopes` 数组会替换内置 Scope 集合，不是追加。** 只写自定义 Scope 会让 `web-origins`、`acr`、`basic`、`email` 这些内置 Scope 在导入后消失；客户端如果仍在 `defaultClientScopes` 里引用它们，导入时会报找不到，运行时授权请求会因 `Invalid scopes` 被拒。本项目的做法是让客户端只引用 JSON 中实际定义的三个 Scope：`profile`、`roles`、`medical-profile`。新增 Scope 时两边要一起改。
 
 ## 子系统登记功能
 
-门户的 `/admin` 区域用服务账号客户端 `medical-portal-admin` 调用 Keycloak Admin API，该账号持有 `manage-clients` 和 `view-clients`，能创建和修改本 Realm 的所有客户端，属于高权限凭据。
+门户的 `/admin` 区域用服务账号客户端 `medical-portal-admin` 调用 Keycloak Admin API。它仅持有管理平台功能所需的八项细粒度权限：`manage-clients`、`view-clients`、`manage-users`、`view-users`、`view-realm`、`manage-realm`、`view-events`、`manage-events`，不授予 `realm-admin`。
 
-- 只授予这两个角色，不要顺手加 `realm-admin`。
+- 只授予上述八项权限，不要顺手加 `realm-admin`。
 - Secret 通过密钥系统注入，与门户登录用的 `medical-portal` Secret 分开管理并分别轮换。
 - `/admin` 已限定平台级角色 `sso-platform-admin`。该角色能创建 OAuth 客户端并取得 Client Secret，只授予统一认证平台负责人，不要与机构级 `organization-admin` 合并，并纳入管理员事件审计。
 - 不需要自助登记时，用 `PORTAL_ADMIN_ENABLED=false` 关闭整个功能，此时门户不再需要服务账号 Secret。
 - 登记页生成的 Client Secret 只展示一次，门户不落库、不写日志。
+
+## 发布接入组件
+
+子系统要在自己的 `pom.xml` 里依赖 `medical-sso-spring-boot-starter`（或 boot2 版），
+所以这两个组件必须先发布到子系统能访问的 Maven 仓库（公司私服，或各自 `mvn install` 到本地仓库）。
+
+**父 POM 要一起发布。** 只发 starter 模块的话，子系统解析依赖时会直接失败：
+
+```
+Could not find artifact com.medical.union:medical-sso:pom:0.1.0
+```
+
+因为 starter 的 POM 里 `<parent>` 指向聚合工程的 POM，仓库里没有它，整条依赖树就断了。
+本地验证时在仓库根执行一次 `mvn -N install`（`-N` 只装父 POM 不构建子模块），
+发布到私服时同理，父 POM 与两个 starter 一并 deploy。
 
 ## 演示数据与生产数据
 
@@ -119,7 +151,7 @@ Token 只承载完成认证和粗粒度授权所需字段。不要加入：身�
 - 平台管理员 `sso-admin` 已完成首次登录改密，或已改用真实管理员账号。
 - 所有应用使用 HTTPS 和精确回调地址。
 - 所有客户端强制 PKCE S256，且各子系统已显式开启，登录流验证通过。
-- 门户服务账号权限仅为 manage-clients 和 view-clients，Secret 与门户登录 Secret 不同。
+- 门户服务账号权限仅为本文列出的八项细粒度权限，Secret 与门户登录 Secret 不同。
 - `sso-platform-admin` 的授予名单已复核，未混入机构管理员。
 - 接口类子系统的 audience 校验已开启，跨系统 Token 调用被拒绝。
 - 跨系统单点登录和统一退出验证通过。
@@ -129,3 +161,27 @@ Token 只承载完成认证和粗粒度授权所需字段。不要加入：身�
 ## 升级原则
 
 固定 Keycloak 镜像版本，不使用 `latest`。先在测试环境升级并验证 Realm 导入、登录主题、OIDC 登录、角色 Claim 和退出流程，再升级生产环境。升级前必须完成数据库备份。
+
+## 仓库内的生产基线
+
+仓库提供 `compose.prod.yml`、`.env.production.example`、生产 TLS 网关模板和管理平台镜像构建文件。它们的安全边界是：数据库、认证内核和管理平台均不映射宿主端口，只有 TLS 网关开放 80/443；生产启动使用 `start`，严格校验统一域名，继续关闭认证内核自带管理控制台。
+
+```bash
+cp .env.production.example .env.production
+# 填入真实域名、证书绝对路径和由密钥系统下发的密码/Secret
+./scripts/render-production-realm.sh .env.production
+./scripts/preflight-production.sh .env.production
+docker compose --env-file .env.production -f compose.prod.yml up -d --build
+./scripts/smoke-test.sh "https://你的统一身份域名"
+```
+
+`render-production-realm.sh` 会生成不入库的 Realm 文件，把平台管理员初始密码和两个客户端 Secret 写入一次性导入文件，并保持首次登录强制改密。已经存在的 Realm 不会被覆盖；存量环境应通过变更流程轮换 Secret，而不是重新导入。
+
+备份与恢复命令：
+
+```bash
+./scripts/backup-postgres.sh
+./scripts/restore-postgres.sh backups/具体文件.sql.gz --confirm
+```
+
+恢复属于破坏性操作，只能在停止业务流量、保留当前库备份后执行。完成后必须跑冒烟测试和关键登录流程。

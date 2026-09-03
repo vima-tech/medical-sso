@@ -8,7 +8,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * 授权中心。一屏看清谁能进哪些业务系统，并支持整列（按科室）批量授权或收回。
+ * 授权中心。分页查看人员可访问的业务系统，并支持当前页整列批量授权或收回。
  *
  * <p>取数按「一个系统一次查询」的方式拿到该系统的全部授权人，
  * 而不是逐人逐系统查，避免人数一多就变成上千次请求。
@@ -30,8 +30,10 @@ public class AuthorizationCenter {
      * 生成授权总览。
      *
      * @param departmentId 科室分组 id，为空表示全部人员
+     * @param requestedPage 请求的页码，从 0 开始
+     * @param pageSize 每页人数
      */
-    public AuthorizationMatrix matrix(String departmentId) {
+    public AuthorizationMatrix matrix(String departmentId, int requestedPage, int pageSize) {
         List<SystemOption> systems = staff.systems();
 
         // 每个系统查一次，得到该系统的授权人集合
@@ -49,9 +51,22 @@ public class AuthorizationCenter {
         }
 
         Map<String, String> names = organizations.nameByCode();
-        List<Map<String, Object>> people = departmentId == null || departmentId.isBlank()
-                ? admin.searchUsers(null, 0, 500)
-                : admin.groupMembers(departmentId);
+        int size = Math.max(pageSize, 1);
+        int total;
+        int page;
+        List<Map<String, Object>> people;
+        if (departmentId == null || departmentId.isBlank()) {
+            total = admin.countUsers(null);
+            page = validPage(requestedPage, total, size);
+            people = admin.searchUsers(null, page * size, size);
+        } else {
+            List<Map<String, Object>> members = new ArrayList<>(admin.groupMembers(departmentId));
+            members.sort((a, b) -> employeeNo(a).compareTo(employeeNo(b)));
+            total = members.size();
+            page = validPage(requestedPage, total, size);
+            int from = page * size;
+            people = members.subList(from, Math.min(from + size, total));
+        }
 
         List<AuthorizationMatrix.Row> rows = new ArrayList<>();
         for (Map<String, Object> person : people) {
@@ -77,7 +92,17 @@ public class AuthorizationCenter {
             String right = b.employeeNo() == null ? "" : b.employeeNo();
             return left.compareTo(right);
         });
-        return new AuthorizationMatrix(systems, rows);
+        return new AuthorizationMatrix(systems, rows, total, page, size);
+    }
+
+    private static int validPage(int requestedPage, int total, int pageSize) {
+        int lastPage = total == 0 ? 0 : (total - 1) / pageSize;
+        return Math.min(Math.max(requestedPage, 0), lastPage);
+    }
+
+    private static String employeeNo(Map<String, Object> person) {
+        String value = attribute(person, "employee_no");
+        return value == null ? "" : value;
     }
 
     /**

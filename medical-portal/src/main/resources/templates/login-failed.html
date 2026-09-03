@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>登录未完成 · 统一身份管理平台</title>
+    <link rel="stylesheet" th:href="@{/css/portal.css}">
+</head>
+<body>
+<main class="login-failed">
+    <div class="login-failed-card">
+        <span class="brand-mark" aria-hidden="true">+</span>
+        <h1>登录未完成</h1>
+        <p class="login-failed-reason" th:text="${reason}">登录请求已失效，请重新发起登录</p>
+        <a class="primary-button" th:href="@{/}">重新登录</a>
+        <p class="login-failed-foot">反复出现请联系平台管理员，并说明这里显示的原因。</p>
+    </div>
+</main>
+</body>
+</html>

@@ -1,0 +1,8 @@
+# 构建上下文是仓库根目录。这里排除的都是体积大又用不上的东西——
+# 不排除的话每次构建都要把几百 MB 的本地仓库和 target 打包送进构建器。
+.git
+.m2
+**/target
+!medical-portal/target/
+!medical-portal/target/medical-portal-0.1.0.jar
+.env

@@ -3,6 +3,7 @@
 <head th:replace="~{admin/shell :: head('人员管理')}"></head>
 <body>
 <div th:replace="~{admin/shell :: nav('staff')}"></div>
+<div th:replace="~{admin/shell :: confirm}"></div>
 
 <main class="admin-main">
     <div th:replace="~{admin/shell :: flash}"></div>
@@ -54,7 +55,12 @@
             </td>
             <td class="actions-col">
                 <a th:href="@{'/admin/staff/' + ${person.id()} + '/edit'}">编辑</a>
-                <form th:action="@{'/admin/staff/' + ${person.id()} + '/enabled'}" method="post" class="inline-form">
+                <form th:action="@{'/admin/staff/' + ${person.id()} + '/enabled'}" method="post" class="inline-form"
+                      th:attr="data-confirm=${person.enabled()}
+                          ? '停用后「' + ${person.name()} + '」将无法登录任何业务系统，账号与授权保留，可随时恢复。'
+                          : '启用后「' + ${person.name()} + '」将恢复登录。'"
+                      th:data-confirm-title="${person.enabled()} ? '停用人员' : '启用人员'"
+                      th:data-confirm-ok="${person.enabled()} ? '停用' : '启用'">
                     <input type="hidden" name="enabled" th:value="${!person.enabled()}">
                     <button type="submit" class="link-button"
                             th:text="${person.enabled()} ? '停用' : '启用'">停用</button>

@@ -14,6 +14,7 @@ PLATFORM_URL="${PLATFORM_URL:-http://localhost:18081}"
 AUTH="$PLATFORM_URL/auth"
 ADMIN_CLIENT="${SSO_ADMIN_CLIENT_ID:-medical-portal-admin}"
 ADMIN_SECRET="${SSO_ADMIN_CLIENT_SECRET:-portal-admin-dev-secret}"
+PLATFORM_ADMIN_PASSWORD="${SSO_PLATFORM_ADMIN_PASSWORD:-Admin@123456}"
 
 if [[ "${ALLOW_DEMO_SEED:-}" != "yes" && "$PLATFORM_URL" != http://localhost:* ]]; then
   echo "拒绝对非本机地址装载演示数据：$PLATFORM_URL" >&2
@@ -27,10 +28,10 @@ for _ in $(seq 1 120); do
   sleep 1
 done
 
-python3 - "$AUTH" "$ADMIN_CLIENT" "$ADMIN_SECRET" <<'PY'
+python3 - "$AUTH" "$ADMIN_CLIENT" "$ADMIN_SECRET" "$PLATFORM_ADMIN_PASSWORD" <<'PY'
 import json, sys, urllib.request, urllib.parse, urllib.error
 
-AUTH, CLIENT, SECRET = sys.argv[1], sys.argv[2], sys.argv[3]
+AUTH, CLIENT, SECRET, PLATFORM_ADMIN_PASSWORD = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
 
 def call(method, path, token=None, body=None, form=None):
     data = None; headers = {}
@@ -78,11 +79,18 @@ for name, code in (("D001-内科", "D001"), ("D002-检验科", "D002")):
         print(f"  建立科室 {name}")
 
 # ---------- 演示业务系统 ----------
+# 最后一列是回调路径：接入方式不同，回调落在不同的地址上
 DEMOS = [
-    ("medical-demo", "Spring Boot 接入示例", "http://localhost:8082", "demo-dev-secret", "boot3"),
-    ("medical-demo-boot2", "JDK 8 子系统接入示例", "http://localhost:8083", "demo-boot2-dev-secret", "boot2"),
+    ("medical-demo", "住院医生工作站（标准接入示例）", "http://localhost:8082", "demo-dev-secret", "boot3",
+     "/login/oauth2/code/medical-sso"),
+    ("medical-demo-boot2", "门诊医生工作站（JDK 8 示例）", "http://localhost:8083", "demo-boot2-dev-secret", "boot2",
+     "/login/oauth2/code/medical-sso"),
+    ("medical-demo-legacy", "检验信息系统（桥接模式示例）", "http://localhost:8084", "demo-legacy-dev-secret",
+     "bridge", "/api/auth/sso/callback"),
+    ("medical-gateway-demo", "放射影像系统（接入网关示例）", "http://localhost:8085", "gateway-demo-dev-secret",
+     "gateway", "/__sso/callback"),
 ]
-for client_id, name, base, secret, stack in DEMOS:
+for client_id, name, base, secret, stack, callback in DEMOS:
     if client_uuid(client_id):
         continue
     call("POST", "/admin/realms/medical/clients", token, body={
@@ -90,7 +98,7 @@ for client_id, name, base, secret, stack in DEMOS:
         "publicClient": False, "secret": secret, "standardFlowEnabled": True,
         "directAccessGrantsEnabled": False, "serviceAccountsEnabled": False, "frontchannelLogout": True,
         "rootUrl": base, "baseUrl": base,
-        "redirectUris": [base + "/login/oauth2/code/medical-sso"], "webOrigins": [base],
+        "redirectUris": [base + callback], "webOrigins": [base],
         "attributes": {"pkce.code.challenge.method": "S256",
                        "post.logout.redirect.uris": base + "/*",
                        "medical.subsystem.stack": stack},
@@ -127,7 +135,9 @@ grant = [r for r in realm_roles if r["name"] in ("doctor", "organization-admin")
 call("POST", f"/admin/realms/medical/users/{user_id}/role-mappings/realm", token, body=grant)
 for client_id, roles in (("medical-portal", ["access"]),
                          ("medical-demo", ["access", "his-user"]),
-                         ("medical-demo-boot2", ["access"])):
+                         ("medical-demo-boot2", ["access"]),
+                         ("medical-demo-legacy", ["access"]),
+                         ("medical-gateway-demo", ["access"])):
     uuid = client_uuid(client_id)
     if not uuid:
         continue
@@ -141,11 +151,11 @@ _, admins = call("GET", "/admin/realms/medical/users?username=sso-admin", token)
 if admins:
     admin = admins[0]
     call("PUT", f"/admin/realms/medical/users/{admin['id']}/reset-password", token,
-         body={"type": "password", "value": "Admin@123456", "temporary": False})
+         body={"type": "password", "value": PLATFORM_ADMIN_PASSWORD, "temporary": False})
     # 生产 Realm 要求首次登录改密，演示环境去掉这个动作省去每次改密
     admin["requiredActions"] = []
     call("PUT", f"/admin/realms/medical/users/{admin['id']}", token, body=admin)
-    print("  平台管理员密码设为演示用固定密码")
+    print("  平台管理员密码已按本地配置更新")
 
 print("演示数据装载完成。")
 PY

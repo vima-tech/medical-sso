@@ -3,7 +3,10 @@ package com.medical.union.portal.admin;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
+
+import java.time.Duration;
 
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(PortalAdminProperties.class)
@@ -12,7 +15,10 @@ public class PortalAdminConfiguration {
 
     @Bean
     KeycloakAdminClient keycloakAdminClient(RestClient.Builder builder, PortalAdminProperties properties) {
-        return new KeycloakAdminClient(builder, properties);
+        SimpleClientHttpRequestFactory requests = new SimpleClientHttpRequestFactory();
+        requests.setConnectTimeout(Duration.ofSeconds(3));
+        requests.setReadTimeout(Duration.ofSeconds(10));
+        return new KeycloakAdminClient(builder.clone().requestFactory(requests), properties);
     }
 
     @Bean
@@ -38,6 +44,11 @@ public class PortalAdminConfiguration {
     @Bean
     ApplicationDirectory applicationDirectory(KeycloakAdminClient admin) {
         return new ApplicationDirectory(admin);
+    }
+
+    @Bean
+    SubsystemDiagnostics subsystemDiagnostics(KeycloakAdminClient admin, RestClient.Builder builder) {
+        return new SubsystemDiagnostics(admin, builder);
     }
 
     @Bean

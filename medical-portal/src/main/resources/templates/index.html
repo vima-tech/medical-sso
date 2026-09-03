@@ -42,11 +42,13 @@
             </div>
             <div>
                 <dt>机构</dt>
-                <dd th:text="${medicalUser.organizationCode() ?: '-'}">H001</dd>
+                <dd th:text="${medicalUser.organizationCode() == null ? '-'
+                    : (orgNames[medicalUser.organizationCode()] ?: medicalUser.organizationCode())}">第一人民医院</dd>
             </div>
             <div>
                 <dt>科室</dt>
-                <dd th:text="${medicalUser.departmentCode() ?: '-'}">D001</dd>
+                <dd th:text="${medicalUser.departmentCode() == null ? '-'
+                    : (orgNames[medicalUser.departmentCode()] ?: medicalUser.departmentCode())}">内科</dd>
             </div>
         </dl>
     </section>

@@ -3,6 +3,7 @@
 <head th:replace="~{admin/shell :: head(${form.isNew()} ? '新增人员' : '编辑人员')}"></head>
 <body>
 <div th:replace="~{admin/shell :: nav('staff')}"></div>
+<div th:replace="~{admin/shell :: confirm}"></div>
 
 <main class="admin-main narrow">
     <div th:replace="~{admin/shell :: flash}"></div>
@@ -77,17 +78,43 @@
             </label>
         </div>
 
-        <fieldset class="choice-group">
+        <!--
+          兼职科室在医共体里的实际体量是十几个机构、每个机构二十多个科室，
+          平铺三百多个复选框既找不到也看不出自己选了什么。
+          这里按机构折叠 + 支持搜索，并把已选项单独列在最上面。
+        -->
+        <fieldset class="choice-group picker" data-picker>
             <legend>兼职科室</legend>
             <p class="group-hint">除主职科室外还在哪些科室任职，可跨机构。主职仍以上面填的机构科室为准，
                 业务系统按主职判断归属；需要完整任职信息的系统可以取全部任职科室。</p>
-            <th:block th:each="org : ${organizations}">
-                <label class="checkbox" th:each="dept : ${org.departments()}"
-                       th:if="${dept.code() != form.departmentCode}">
-                    <input type="checkbox" th:field="*{additionalDepartmentCodes}" th:value="${dept.code()}">
-                    <span th:text="${org.name()} + ' · ' + ${dept.name()}">第一人民医院 · 内科</span>
-                </label>
-            </th:block>
+
+            <div class="picker-selected" data-picker-selected></div>
+
+            <div class="picker-toolbar">
+                <input class="picker-search" type="search" autocomplete="off"
+                       placeholder="搜索机构或科室，例如 检验科" data-picker-search>
+                <button type="button" class="link-button" data-picker-clear>清空已选</button>
+            </div>
+            <p class="picker-empty" data-picker-noresult hidden>没有匹配的科室。</p>
+
+            <div class="picker-groups">
+                <details class="picker-org" th:each="org : ${organizations}" data-picker-org>
+                    <summary>
+                        <span class="picker-org-name" th:text="${org.name()}">第一人民医院</span>
+                        <span class="picker-org-count" data-picker-count>0</span>
+                    </summary>
+                    <div class="picker-depts">
+                        <label class="checkbox" th:each="dept : ${org.departments()}"
+                               th:if="${dept.code() != form.departmentCode}"
+                               th:attr="data-picker-item=${org.name()} + ' ' + ${dept.name()} + ' ' + ${dept.code()}">
+                            <input type="checkbox" th:field="*{additionalDepartmentCodes}"
+                                   th:value="${dept.code()}"
+                                   th:attr="data-picker-label=${org.name()} + ' · ' + ${dept.name()}">
+                            <span th:text="${dept.name()}">内科</span>
+                        </label>
+                    </div>
+                </details>
+            </div>
         </fieldset>
 
         <fieldset class="choice-group">
@@ -150,6 +177,8 @@
             </tbody>
         </table>
         <form method="post" th:action="@{'/admin/staff/' + ${form.id} + '/logout'}" class="inline-reset"
+              th:attr="data-confirm='将结束「' + ${form.name} + '」在全部业务系统的登录状态，本人需要重新登录。'"
+              data-confirm-title="强制下线" data-confirm-ok="强制下线"
               th:unless="${#lists.isEmpty(sessions)}">
             <button class="quiet-button" type="submit">强制在所有设备下线</button>
             <small>用于离职或账号外泄。已建立的业务系统本地会话不受影响，需各系统自行处理。</small>
@@ -159,7 +188,9 @@
     <section class="danger-zone" th:unless="${form.isNew()}">
         <h2>重置密码</h2>
         <p>用于本人忘记密码。重置后请当面或通过安全渠道告知，不要用微信或短信发送。</p>
-        <form method="post" th:action="@{'/admin/staff/' + ${form.id} + '/password'}" class="inline-reset">
+        <form method="post" th:action="@{'/admin/staff/' + ${form.id} + '/password'}" class="inline-reset"
+              th:attr="data-confirm='将重置「' + ${form.name} + '」的密码。原密码立即失效，请当面或通过安全渠道告知本人。'"
+              data-confirm-title="重置密码" data-confirm-ok="重置">
             <input type="text" name="password" placeholder="新密码" autocomplete="off" required>
             <label class="checkbox">
                 <input type="checkbox" name="mustChange" value="true" checked>
@@ -169,6 +200,105 @@
         </form>
     </section>
 </main>
+
+<script>
+    // 兼职科室选择器：已选摘要 + 搜索 + 按机构折叠。
+    // 复选框始终留在表单里，只是隐藏显示，因此提交逻辑与改版前完全一致。
+    (function () {
+        var picker = document.querySelector('[data-picker]');
+        if (!picker) {
+            return;
+        }
+        var selectedBox = picker.querySelector('[data-picker-selected]');
+        var search = picker.querySelector('[data-picker-search]');
+        var clear = picker.querySelector('[data-picker-clear]');
+        var noResult = picker.querySelector('[data-picker-noresult]');
+        var orgs = Array.prototype.slice.call(picker.querySelectorAll('[data-picker-org]'));
+        var boxes = Array.prototype.slice.call(picker.querySelectorAll('input[type="checkbox"]'));
+
+        function renderSelected() {
+            var chosen = boxes.filter(function (b) { return b.checked; });
+            selectedBox.textContent = '';
+            if (!chosen.length) {
+                var empty = document.createElement('p');
+                empty.className = 'picker-empty';
+                empty.textContent = '尚未选择兼职科室。只在本科室任职的人员留空即可。';
+                selectedBox.appendChild(empty);
+            } else {
+                chosen.forEach(function (box) {
+                    var chip = document.createElement('button');
+                    chip.type = 'button';
+                    chip.className = 'picker-chip';
+                    chip.textContent = box.getAttribute('data-picker-label');
+                    // 点已选项就是取消它，不用回到长列表里找
+                    chip.setAttribute('aria-label', '取消 ' + box.getAttribute('data-picker-label'));
+                    chip.addEventListener('click', function () {
+                        box.checked = false;
+                        refresh();
+                    });
+                    selectedBox.appendChild(chip);
+                });
+            }
+            clear.hidden = chosen.length === 0;
+            orgs.forEach(function (org) {
+                var inOrg = Array.prototype.slice.call(org.querySelectorAll('input[type="checkbox"]'));
+                var picked = inOrg.filter(function (b) { return b.checked; }).length;
+                var count = org.querySelector('[data-picker-count]');
+                count.textContent = picked ? '已选 ' + picked + ' / ' + inOrg.length : inOrg.length + ' 个科室';
+                count.classList.toggle('has-picked', picked > 0);
+            });
+        }
+
+        function applyFilter() {
+            var keyword = search.value.trim().toLowerCase();
+            var hits = 0;
+            orgs.forEach(function (org) {
+                var items = Array.prototype.slice.call(org.querySelectorAll('[data-picker-item]'));
+                var shown = 0;
+                items.forEach(function (item) {
+                    var match = !keyword
+                        || item.getAttribute('data-picker-item').toLowerCase().indexOf(keyword) >= 0;
+                    item.hidden = !match;
+                    if (match) {
+                        shown++;
+                    }
+                });
+                org.hidden = shown === 0;
+                hits += shown;
+                if (keyword) {
+                    org.open = shown > 0;   // 搜索时自动展开命中的机构
+                } else if (org.dataset.autoOpened === 'true') {
+                    org.open = false;       // 清空搜索后收回自动展开的，保留用户手动展开的
+                }
+                org.dataset.autoOpened = keyword && shown > 0 ? 'true' : 'false';
+            });
+            noResult.hidden = hits > 0;
+        }
+
+        function refresh() {
+            renderSelected();
+        }
+
+        picker.addEventListener('change', function (event) {
+            if (event.target.type === 'checkbox') {
+                refresh();
+            }
+        });
+        search.addEventListener('input', applyFilter);
+        clear.addEventListener('click', function () {
+            boxes.forEach(function (b) { b.checked = false; });
+            refresh();
+        });
+
+        // 已经选中的机构默认展开，编辑时一眼看到本人现有的兼职
+        orgs.forEach(function (org) {
+            if (org.querySelector('input[type="checkbox"]:checked')) {
+                org.open = true;
+            }
+        });
+        refresh();
+    })();
+</script>
 
 <script>
     // 科室随机构联动：只显示当前机构下的科室

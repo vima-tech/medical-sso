@@ -3,6 +3,7 @@
 <head th:replace="~{admin/shell :: head('机构与科室')}"></head>
 <body>
 <div th:replace="~{admin/shell :: nav('organizations')}"></div>
+<div th:replace="~{admin/shell :: confirm}"></div>
 
 <main class="admin-main">
     <div th:replace="~{admin/shell :: flash}"></div>
@@ -15,8 +16,18 @@
         <a class="primary-button" th:href="@{/admin/organizations/new}">新增机构</a>
     </section>
 
+    <!-- 医共体上线体量是十几个机构、每机构二十多科室，全部铺开要滚十几屏，
+         所以默认只显示机构一层，科室按需展开，并支持按机构名或科室名搜索。 -->
+    <div class="picker-toolbar org-filter">
+        <input class="picker-search" type="search" autocomplete="off"
+               placeholder="搜索机构或科室，例如 检验科" data-org-search>
+        <button type="button" class="link-button" data-org-expand>全部展开</button>
+    </div>
+    <p class="picker-empty" data-org-noresult hidden>没有匹配的机构或科室。</p>
+
     <div class="org-tree">
-        <article class="org-card" th:each="org : ${organizations}">
+        <article class="org-card" th:each="org : ${organizations}" data-org-card
+                 th:attr="data-org-text=${org.name()} + ' ' + ${org.code()}">
             <header class="org-head">
                 <div>
                     <h2 th:text="${org.name()}">第一人民医院</h2>
@@ -28,22 +39,29 @@
                     </p>
                 </div>
                 <div class="org-actions">
+                    <button type="button" class="link-button" data-org-toggle
+                            th:attr="data-count=${#lists.size(org.departments())}">展开科室</button>
                     <a th:href="@{/admin/organizations/new(parentId=${org.id()})}">新增科室</a>
                     <a th:href="@{'/admin/organizations/' + ${org.id()} + '/edit'}">编辑</a>
-                    <form th:action="@{'/admin/organizations/' + ${org.id()} + '/delete'}" method="post" class="inline-form">
+                    <form th:action="@{'/admin/organizations/' + ${org.id()} + '/delete'}" method="post" class="inline-form"
+                          th:attr="data-confirm='确定删除机构「' + ${org.name()} + '」吗？其下的科室会一并删除，此操作不可撤销。'"
+                          data-confirm-title="删除机构" data-confirm-ok="删除">
                         <button type="submit" class="link-button danger">删除</button>
                     </form>
                 </div>
             </header>
 
-            <ul class="dept-list" th:if="${!#lists.isEmpty(org.departments())}">
-                <li th:each="dept : ${org.departments()}">
+            <ul class="dept-list" th:if="${!#lists.isEmpty(org.departments())}" data-dept-list hidden>
+                <li th:each="dept : ${org.departments()}" data-dept-row
+                    th:attr="data-dept-text=${dept.name()} + ' ' + ${dept.code()}">
                     <span class="dept-name" th:text="${dept.name()}">内科</span>
                     <span class="tag" th:text="${dept.code()}">D001</span>
                     <span class="org-meta" th:text="${dept.memberCount()} + ' 人'">0 人</span>
                     <span class="dept-actions">
                         <a th:href="@{'/admin/organizations/' + ${dept.id()} + '/edit'}">编辑</a>
-                        <form th:action="@{'/admin/organizations/' + ${dept.id()} + '/delete'}" method="post" class="inline-form">
+                        <form th:action="@{'/admin/organizations/' + ${dept.id()} + '/delete'}" method="post" class="inline-form"
+                              th:attr="data-confirm='确定删除科室「' + ${dept.name()} + '」吗？此操作不可撤销。'"
+                              data-confirm-title="删除科室" data-confirm-ok="删除">
                             <button type="submit" class="link-button danger">删除</button>
                         </form>
                     </span>
@@ -58,5 +76,72 @@
         <p>先新增机构，再在机构下新增科室，之后才能给人员建档。</p>
     </div>
 </main>
+
+<script>
+    // 机构与科室：默认只显示机构一层；搜索时自动展开命中的机构并只留命中的科室。
+    (function () {
+        var search = document.querySelector('[data-org-search]');
+        if (!search) {
+            return;
+        }
+        var expandAll = document.querySelector('[data-org-expand]');
+        var noResult = document.querySelector('[data-org-noresult]');
+        var cards = Array.prototype.slice.call(document.querySelectorAll('[data-org-card]'));
+
+        function setOpen(card, open) {
+            var list = card.querySelector('[data-dept-list]');
+            var toggle = card.querySelector('[data-org-toggle]');
+            if (!list || !toggle) {
+                return;
+            }
+            list.hidden = !open;
+            toggle.textContent = open ? '收起科室' : '展开科室（' + toggle.dataset.count + '）';
+        }
+
+        cards.forEach(function (card) {
+            var toggle = card.querySelector('[data-org-toggle]');
+            if (!toggle) {
+                return;
+            }
+            setOpen(card, false);
+            toggle.addEventListener('click', function () {
+                setOpen(card, card.querySelector('[data-dept-list]').hidden);
+            });
+        });
+
+        search.addEventListener('input', function () {
+            var keyword = search.value.trim().toLowerCase();
+            var hits = 0;
+            cards.forEach(function (card) {
+                var rows = Array.prototype.slice.call(card.querySelectorAll('[data-dept-row]'));
+                var orgMatch = !keyword
+                    || card.getAttribute('data-org-text').toLowerCase().indexOf(keyword) >= 0;
+                var deptHits = 0;
+                rows.forEach(function (row) {
+                    var match = !keyword || orgMatch
+                        || row.getAttribute('data-dept-text').toLowerCase().indexOf(keyword) >= 0;
+                    row.hidden = !match;
+                    if (match) {
+                        deptHits++;
+                    }
+                });
+                var show = orgMatch || deptHits > 0;
+                card.hidden = !show;
+                if (show) {
+                    hits++;
+                }
+                // 搜索时展开命中的机构，清空搜索后重新收起
+                setOpen(card, Boolean(keyword) && show && deptHits > 0);
+            });
+            noResult.hidden = hits > 0;
+        });
+
+        expandAll.addEventListener('click', function () {
+            var open = expandAll.textContent === '全部展开';
+            cards.forEach(function (card) { setOpen(card, open); });
+            expandAll.textContent = open ? '全部收起' : '全部展开';
+        });
+    })();
+</script>
 </body>
 </html>

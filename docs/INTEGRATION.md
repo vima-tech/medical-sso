@@ -2,9 +2,18 @@
 
 本文面向需要接入医共体统一身份认证的 Spring Boot 系统。统一认证采用 OpenID Connect Authorization Code Flow，浏览器系统由 Spring Security 建立本地 Session，接口系统校验 Bearer JWT。
 
-**最快的接入方式不是读这份文档。** 让认证平台管理员在门户的「子系统管理」里登记你的系统，登记完成后页面会直接给出填好真实参数的依赖、配置和代码，复制到项目里即可。本文是那份生成结果的完整背景说明，用于排查问题和理解约定。
+**最快的接入方式不是读这份文档。** 让认证平台管理员在管理平台的「业务系统」里登记你的系统，登记完成后页面会直接给出填好真实参数的依赖、配置和代码，复制到项目里即可。本文是那份生成结果的完整背景说明，用于排查问题和理解约定。
 
-按 JDK 版本选择接入组件：
+先按你的系统情况选一种接入方式，四选一，不要挨个看完：
+
+| 你的系统 | 接入方式 | 改动量 | 见 |
+| --- | --- | --- | --- |
+| Spring Boot，没有自己的登录体系 | 标准接入 | 两段配置 + 一个安全配置类 | 第三节；JDK 8 见第十节 |
+| Spring Boot，已有账号密码登录，且要**两种登录并存** | 桥接模式 | 实现一个接口，共两个方法 | 第十二节 |
+| 不是 Java、没有源码、或代码动不了 | 接入网关 | **零改动**，在它前面挂一个网关进程 | 第十三节 |
+| 只提供接口、不做页面 | 资源服务 | 一段配置 | 第四节 |
+
+按 JDK 版本选择接入组件（前两种方式都用它）：
 
 | 子系统 | 接入组件 | 说明 |
 | --- | --- | --- |
@@ -71,7 +80,7 @@ mvn -Dmaven.repo.local=.m2/repository -DskipTests install
 <dependency>
     <groupId>com.medical.union</groupId>
     <artifactId>medical-sso-spring-boot-starter</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>0.1.0</version>
 </dependency>
 
 <dependency>
@@ -88,6 +97,12 @@ mvn -Dmaven.repo.local=.m2/repository -DskipTests install
 ### 添加配置
 
 ```yaml
+server:
+  # 应用几乎总是跑在反向代理后面。不配这一行，Spring 会用内网地址拼 redirect_uri，
+  # 与登记的回调地址对不上，表现就是登录后一直跳回登录页。
+  # 代理发 X-Forwarded-* 是一半，应用采信它们是另一半，两边都要有。
+  forward-headers-strategy: framework
+
 spring:
   security:
     oauth2:
@@ -304,7 +319,11 @@ LogoutSuccessHandler logoutSuccessHandler(
 
 ### 页面反复跳转登录
 
-检查浏览器访问地址、Redirect URI、服务端识别的协议和域名是否一致。反向代理后必须正确传递 `X-Forwarded-Proto`、`X-Forwarded-Host`。
+检查浏览器访问地址、Redirect URI、服务端识别的协议和域名是否一致。
+
+这里要两边都做到：反向代理必须正确传递 `X-Forwarded-Proto`、`X-Forwarded-Host`，
+**应用也必须配 `server.forward-headers-strategy: framework` 去采信它们**。
+只做代理那一半，Spring 根本不看这些头，照样用内网地址拼 `redirect_uri`。
 
 ### 登录成功但返回 403
 
@@ -330,7 +349,7 @@ Spring Boot 2.0 - 2.2 不在支持范围内：这些版本的 Spring Security �
 <dependency>
     <groupId>com.medical.union</groupId>
     <artifactId>medical-sso-spring-boot2-starter</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>0.1.0</version>
 </dependency>
 
 <dependency>
@@ -386,7 +405,7 @@ Spring Security 6（Boot 3）在没有显式配置时，会去容器里找 `OAut
 
 ## 十一、在门户中登记子系统
 
-认证平台管理员在门户的「子系统管理」中登记，只需要四项：系统名称、系统编码、系统访问地址、子系统技术栈。
+认证平台管理员在管理平台的「业务系统」中登记，只需要四项：系统名称、系统编码、系统访问地址、接入方式。
 
 登记后自动完成：
 
@@ -400,4 +419,255 @@ Spring Security 6（Boot 3）在没有显式配置时，会去容器里找 `OAut
 
 Client Secret 只在登记完成后展示一次，请立即交给子系统负责人并存入密钥系统。页面关闭后需要重新生成。
 
-登记完成后仍需人工做一件事：给用户分配该系统的 `access` 角色，否则用户能登录但会被子系统拒绝。
+登记完成后仍需人工做一件事：在「授权中心」给人员勾选该系统，否则用户能登录但会被子系统拒绝。
+
+### 接入自检
+
+配好之后先别急着调登录。在业务系统列表点「自检」，平台会逐项检查：系统是否启用、是否强制 PKCE、
+回调地址与访问地址是否一致、有没有 `access` 角色、有没有挂 `medical-profile`、有没有 audience 映射、
+有没有人被授权、平台能不能连上这个系统。每项异常都会给出该怎么改。
+
+其中「回调地址与访问地址不一致」是最高频的故障，表现为登录后一直跳回登录页，看日志看不出问题。
+
+
+## 十二、已有登录体系的系统（桥接模式）
+
+适用于这种情况：系统已经有自己的账号密码登录和会话机制，接入统一认证以后，
+**两种登录方式要并存**——统一认证是主入口，原有的账号密码登录不能停。
+
+### 为什么不用标准接入
+
+标准接入会让 Spring Security 接管登录和会话。已有登录体系的系统这么改，
+等于把认证和会话整套换掉，前端拿令牌的方式、接口鉴权、单元测试全要跟着动。
+桥接模式反过来：协议部分（跳转、换码、验签、防重放）全部收进组件，
+系统只回答一个问题——**「统一认证告诉我这个人是谁了，我给他发什么凭证」**。
+
+### 子系统只写这一个类
+
+```java
+@Component
+public class LegacyIdentityBridge implements MedicalIdentityBridge {
+
+    private final AccountStore accounts;
+
+    /** 统一认证已确认身份。返回本系统的凭证；返回 null 表示这个人还没关联本系统账号。 */
+    @Override
+    public String onAuthenticated(MedicalUser identity) {
+        return accounts.byPersonId(identity.personId())
+                .map(accounts::issueToken)   // 换成你自己发令牌/建 Session 的那一行
+                .orElse(null);
+    }
+
+    /** 首次绑定：用旧账号密码确认「统一身份里的这个人」就是「本系统的这个旧账号」。 */
+    @Override
+    public String bind(MedicalUser identity, String username, String password) {
+        // 账号不存在与密码不对给同一句提示，否则这个接口能被用来枚举账号
+        Account account = accounts.byUsername(username)
+                .filter(a -> a.passwordMatches(password))
+                .orElseThrow(() -> new IllegalArgumentException("原账号或密码不正确"));
+        if (!account.isEnabled()) {
+            throw new IllegalArgumentException("该账号已停用，请联系信息科");
+        }
+        // 已归属别的统一身份就不能再绑，否则等于顶替别人
+        if (account.personId() != null && !account.personId().equals(identity.personId())) {
+            throw new IllegalArgumentException("该账号已绑定其他统一身份，请联系信息科");
+        }
+        accounts.link(account, identity.personId());
+        return accounts.issueToken(account);
+    }
+}
+```
+
+### 配置
+
+```yaml
+server:
+  # 反向代理后面必须有这一行，否则组件拼出来的回调地址是内网地址，登录后回不来
+  forward-headers-strategy: framework
+
+medical:
+  sso:
+    client-id: your-system
+    bridge:
+      enabled: true
+      issuer-uri: http://sso.intra.example/auth/realms/medical
+      client-secret: ${SSO_CLIENT_SECRET}
+      base-url: https://your-system.intra.example
+      redirect-uri: https://your-system.intra.example/api/auth/sso/callback
+      # 原有账号密码登录怎么处理：
+      #   enabled         并存，登录页收在「其他登录方式」里（推荐）
+      #   emergency-only  只留应急账号，普通人员必须走统一认证
+      #   disabled        完全关闭
+      local-login: enabled
+      self-service-binding: true
+      # 组件把浏览器送回前端的三个落点，必须与前端路由一一对应。
+      # 用默认值时可以省略，但前端那两个页面一定要有。
+      success-uri: /sso/callback
+      bind-uri: /sso/bind
+      failure-uri: /login
+```
+
+### 组件提供的端点
+
+| 端点 | 用途 |
+| --- | --- |
+| `GET /api/auth/sso/start` | 发起统一登录，可带 `redirect` 参数记住原页面 |
+| `GET /api/auth/sso/callback` | 统一认证回调，组件内部处理 |
+| `POST /api/auth/sso/exchange-ticket` | 前端用一次性票据换回本系统凭证 |
+| `POST /api/auth/sso/bind` | 首次绑定 |
+
+凭证不直接放进跳转地址，而是用一次性票据换取。令牌因此不会进入浏览器历史和访问日志。
+票据一次有效，60 秒过期，重放会被拒绝。
+
+### 首次绑定是怎么走的
+
+统一认证里的人和本系统的旧账号，最初是两笔独立的数据，没有对应关系。
+第一次用统一身份登录时 `onAuthenticated` 返回 `null`，组件把用户引导到绑定页，
+让他用**旧的账号密码**确认一次。确认之后统一人员标识写进本系统账号，
+以后每次登录都直接进，不再需要绑定。
+
+管理员批量预置了对应关系时不会走到这一步。没有预置的，用户自己就能完成，不用找管理员。
+
+### 前端要做的三件事
+
+这一步最容易漏：后端接完、也确实跳出去了，回来却 404 或被路由守卫踢回登录页，
+看着像「组件不工作」，其实是前端还没接住。
+
+**① 新增两条公开路由**，与配置里的 `success-uri` / `bind-uri` 对应：
+
+```js
+{ path: '/sso/callback', component: SsoCallback, meta: { public: true } }
+{ path: '/sso/bind',     component: SsoBind,     meta: { public: true } }
+```
+
+必须是**公开**路由——走到这两个地址时本系统还没有登录态，被守卫拦下就会踢回登录页，
+登录流程直接死循环。
+
+**② 这两个页面各做一件事**：`/sso/callback` 取地址里的 `ticket` 换回本系统凭证后进首页；
+`/sso/bind` 显示「原账号 + 原密码」两个输入框完成绑定。
+
+**③ 调这两个端点不要用本系统的业务请求封装。** 组件返回的是裸 JSON
+（`{ credential }` 或 `{ message }`），不是本系统统一的响应信封；业务封装里的拦截器
+通常只认自己的成功码，会把这里的正常响应判成错误。用原生 `fetch`：
+
+```js
+const res = await fetch('/api/auth/sso/exchange-ticket', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ ticket }),
+})
+const data = await res.json()
+if (!res.ok) throw new Error(data.message)
+// data.credential 就是本系统的凭证，之后的处理与原有登录完全一致
+```
+
+绑定同理，`POST /api/auth/sso/bind` 传 `{ bindTicket, username, password }`。
+
+### 回调地址填哪个
+
+前后端分离的系统请注意：登记的回调地址是**用户浏览器访问的地址**（通常是前端），
+不是后端服务的地址。例如前端 `https://sustain.intra.example`、后端在内网 `:8091`，
+应登记 `https://sustain.intra.example/api/auth/sso/callback`，由前端的反向代理
+或开发服务器把 `/api` 转给后端。填成后端地址，登录后就回不来了。
+
+### 登录页怎么摆
+
+推荐「统一认证为主，本地登录折叠」：统一登录是页面上唯一显眼的按钮，
+原有的账号密码表单收进「其他登录方式」的折叠区。既不影响老用户，也把新用户导向统一入口。
+
+登记时接入方式选「已有账号密码登录」，平台会自动把回调地址登记成 `/api/auth/sso/callback`，不需要再手工调整。
+
+完整可运行代码见 `medical-sso-demo-legacy`，包含登录页、绑定页和一套模拟的旧账号体系。
+
+## 十三、改不动的系统（接入网关）
+
+适用于：不是 Java 写的、买来的成品没有源码、或者动一行都要走变更流程的系统。
+
+### 原理
+
+在业务系统前面挂一个网关进程。用户访问的是网关，网关替业务系统完成统一认证登录，
+然后把请求原样转给业务系统，并**在请求头里带上当前登录人是谁**。
+
+业务系统一行代码都不用改，也不需要理解 OIDC——它只是发现每个请求都多了几个请求头。
+取当前用户的地方从「读自己的 Session」改成「读一个请求头」，就接上了。
+
+```
+用户 ──▶ 接入网关 :8080 ──▶ 业务系统 127.0.0.1:9000
+           │                    ▲
+           │                    └── X-Medical-Person-Id: P000123
+           ▼                        X-Medical-Name: %E5%BC%A0%E4%B8%89
+       统一认证登录
+```
+
+### 注入的请求头
+
+| 请求头 | 内容 |
+| --- | --- |
+| `X-Medical-Person-Id` | 统一人员标识，跨系统认人就靠它 |
+| `X-Medical-Employee-No` | 工号 |
+| `X-Medical-Username` | 登录名 |
+| `X-Medical-Name` | 姓名，**URL 编码**，读到后解码一次 |
+| `X-Medical-Org-Code` | 所属机构编码 |
+| `X-Medical-Dept-Code` | 所属科室编码 |
+| `X-Medical-Roles` | 该系统内的角色，逗号分隔 |
+| `X-Medical-Gateway-Token` | 网关口令，见下方安全前提 |
+
+姓名单独做 URL 编码，是因为 HTTP 请求头只能放 ASCII，中文直接放进去会乱码或被拒绝。
+
+```php
+$personId = $_SERVER['HTTP_X_MEDICAL_PERSON_ID'];
+$name     = urldecode($_SERVER['HTTP_X_MEDICAL_NAME'] ?? '');
+```
+
+### 安全前提（必须做，否则等于没有认证）
+
+身份走请求头，只有在「业务系统只能收到网关转来的请求」这个前提下才成立。
+能直连业务系统的人，可以自己加一个 `X-Medical-Person-Id` 头冒充任何人，包括院长。
+
+两道闸，都要上：
+
+1. **业务系统只监听回环地址**（如 `127.0.0.1:9000`），或用防火墙只放行网关。这是主要防线。
+2. **校验网关口令**：网关每个请求都会带 `X-Medical-Gateway-Token`，业务系统比对一下，
+   对不上就返回 403。这是第二道闸。
+
+网关这一侧已经做了对应的防护：浏览器送来的所有 `X-Medical-*` 请求头一律丢弃后才转发，
+外部无法通过伪造同名请求头把身份塞进来。
+
+### 配置与启动
+
+```yaml
+server:
+  port: 8080          # 原来业务系统对外的端口，现在给网关
+
+medical:
+  sso:
+    client-id: your-system
+    bridge:
+      issuer-uri: http://sso.intra.example/auth/realms/medical
+      client-secret: ${SSO_CLIENT_SECRET}
+      redirect-uri: https://your-system.intra.example/__sso/callback
+  gateway:
+    upstream: http://127.0.0.1:9000        # 业务系统的真实地址
+    public-base-url: https://your-system.intra.example
+    upstream-token: ${GATEWAY_UPSTREAM_TOKEN}
+    public-paths:                          # 不需要登录的路径前缀
+      - /static/
+      - /favicon.ico
+    session-ttl: 8h
+```
+
+```bash
+java -jar medical-sso-gateway-0.1.0.jar --spring.config.location=file:./application.yml
+```
+
+登记时接入方式选「改不动的系统」，平台会自动把回调地址登记成 `/__sso/callback`。
+
+### 几个行为约定
+
+- 未登录访问页面会跳转统一登录页；登录完回到**原本要去的那个页面**，不是首页。
+- 未登录的接口请求（`Accept: application/json`）返回 **401**，不跳转。
+  否则前端的 fetch 会跟到登录页，拿到一段 HTTP 当 JSON 解析，报出与登录毫不相干的错。
+- `/__sso/logout` 只退本系统，不动统一认证的登录状态——是否要连带退出其他系统，
+  不该由某一个业务系统替用户决定。
+- 登录状态放在网关进程内存里。网关重启后用户重新登录一次，因为统一认证那边的会话还在，这一步是无感的。
+  要多实例部署时需要把它换成共享存储。

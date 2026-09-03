@@ -14,7 +14,7 @@
 
     <groupId>com.medical.union</groupId>
     <artifactId>medical-sso-spring-boot2-starter</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>0.1.0</version>
     <name>medical-sso-spring-boot2-starter</name>
     <description>医共体统一身份认证接入组件（Spring Boot 2.x / JDK 8）</description>
 
@@ -45,6 +45,11 @@
             <optional>true</optional>
         </dependency>
         <!-- Spring Boot 2.x 仍是 javax.servlet 命名空间；只在编译期需要 -->
+        <!-- 桥接模式的端点需要 Web；不使用桥接模式的子系统不会装配它们 -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-webmvc</artifactId>
+        </dependency>
         <dependency>
             <groupId>jakarta.servlet</groupId>
             <artifactId>jakarta.servlet-api</artifactId>

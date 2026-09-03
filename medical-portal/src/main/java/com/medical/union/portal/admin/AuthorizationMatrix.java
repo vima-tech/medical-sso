@@ -6,7 +6,14 @@ import java.util.Set;
 /** 「人员 × 业务系统」的授权总览。 */
 public record AuthorizationMatrix(
         List<SystemOption> systems,
-        List<Row> rows) {
+        List<Row> rows,
+        int total,
+        int page,
+        int pageSize) {
+
+    public boolean hasNext() {
+        return (page + 1) * pageSize < total;
+    }
 
     /** 一名人员在各系统上的授权情况。 */
     public record Row(

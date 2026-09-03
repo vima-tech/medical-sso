@@ -44,7 +44,7 @@ public class KeycloakAdminClient {
                 .retrieve()
                 .body(Map.class);
         if (response == null || response.get("access_token") == null) {
-            throw new IllegalStateException("获取管理令牌失败：Keycloak 未返回 access_token");
+            throw new IllegalStateException("连接认证内核失败：未能取得管理令牌，请检查平台配置");
         }
         cachedToken = String.valueOf(response.get("access_token"));
         long expiresIn = response.get("expires_in") instanceof Number seconds ? seconds.longValue() : 60L;
@@ -59,10 +59,7 @@ public class KeycloakAdminClient {
 
     @SuppressWarnings("unchecked")
     public List<Map<String, Object>> listClients() {
-        List<Map<String, Object>> clients = get("/admin/realms/{realm}/clients", properties.realm())
-                .retrieve()
-                .body(List.class);
-        return clients == null ? List.of() : clients;
+        return paged("/admin/realms/{realm}/clients", properties.realm());
     }
 
     @SuppressWarnings("unchecked")
@@ -97,7 +94,7 @@ public class KeycloakAdminClient {
         }
         Map<String, Object> created = findClient(String.valueOf(representation.get("clientId")));
         if (created == null) {
-            throw new IllegalStateException("创建客户端失败：Keycloak 未返回新客户端");
+            throw new IllegalStateException("登记业务系统失败：认证内核未返回新建的系统");
         }
         return String.valueOf(created.get("id"));
     }
@@ -120,15 +117,9 @@ public class KeycloakAdminClient {
 
     @SuppressWarnings("unchecked")
     public List<String> clientRoleNames(String clientUuid) {
-        List<Map<String, Object>> roles = get(
-                "/admin/realms/{realm}/clients/{id}/roles", properties.realm(), clientUuid)
-                .retrieve()
-                .body(List.class);
         List<String> names = new ArrayList<>();
-        if (roles != null) {
-            for (Map<String, Object> role : roles) {
-                names.add(String.valueOf(role.get("name")));
-            }
+        for (Map<String, Object> role : clientRoles(clientUuid)) {
+            names.add(String.valueOf(role.get("name")));
         }
         return names;
     }
@@ -199,7 +190,7 @@ public class KeycloakAdminClient {
             if (location != null) {
                 return location.substring(location.lastIndexOf('/') + 1);
             }
-            throw new IllegalStateException("创建人员失败：Keycloak 未返回新用户位置");
+            throw new IllegalStateException("新增人员失败：认证内核未返回新建的人员");
         } catch (RestClientResponseException ex) {
             throw new IllegalStateException("创建人员失败：" + ex.getResponseBodyAsString(), ex);
         }
@@ -246,10 +237,7 @@ public class KeycloakAdminClient {
 
     @SuppressWarnings("unchecked")
     public List<Map<String, Object>> realmRoles() {
-        List<Map<String, Object>> roles = get("/admin/realms/{realm}/roles", properties.realm())
-                .retrieve()
-                .body(List.class);
-        return roles == null ? List.of() : roles;
+        return paged("/admin/realms/{realm}/roles", properties.realm());
     }
 
     @SuppressWarnings("unchecked")
@@ -263,11 +251,7 @@ public class KeycloakAdminClient {
 
     @SuppressWarnings("unchecked")
     public List<Map<String, Object>> clientRoles(String clientUuid) {
-        List<Map<String, Object>> roles = get(
-                "/admin/realms/{realm}/clients/{id}/roles", properties.realm(), clientUuid)
-                .retrieve()
-                .body(List.class);
-        return roles == null ? List.of() : roles;
+        return paged("/admin/realms/{realm}/clients/{id}/roles", properties.realm(), clientUuid);
     }
 
     @SuppressWarnings("unchecked")
@@ -334,25 +318,47 @@ public class KeycloakAdminClient {
                 .toBodilessEntity();
     }
 
-    // ---------- 机构与科室 ----------
-
+    /**
+     * 逐页取完一个列表接口。
+     *
+     * <p>认证内核的列表接口都有默认页大小，而且**不带任何超限提示**：
+     * 子 Group 默认只给 10 条，客户端和角色默认 100 条。不显式分页的话，
+     * 一个有 20 个科室的机构只会显示前 10 个，第 11 个之后的科室在界面上
+     * 根本不存在，管理员也不会收到任何提示。这里一律取到取完为止。
+     */
     @SuppressWarnings("unchecked")
-    public List<Map<String, Object>> topLevelGroups() {
-        List<Map<String, Object>> groups = get(
-                "/admin/realms/{realm}/groups?briefRepresentation=false", properties.realm())
-                .retrieve()
-                .body(List.class);
-        return groups == null ? List.of() : groups;
+    private List<Map<String, Object>> paged(String path, Object... args) {
+        String separator = path.contains("?") ? "&" : "?";
+        List<Map<String, Object>> all = new ArrayList<>();
+        int pageSize = 200;
+        for (int first = 0; ; first += pageSize) {
+            Object[] callArgs = new Object[args.length + 2];
+            System.arraycopy(args, 0, callArgs, 0, args.length);
+            callArgs[args.length] = first;
+            callArgs[args.length + 1] = pageSize;
+            List<Map<String, Object>> page = get(
+                    path + separator + "first={__first}&max={__max}", callArgs)
+                    .retrieve()
+                    .body(List.class);
+            if (page == null || page.isEmpty()) {
+                return all;
+            }
+            all.addAll(page);
+            if (page.size() < pageSize) {
+                return all;   // 不满一页说明已经取完
+            }
+        }
     }
 
-    @SuppressWarnings("unchecked")
+    // ---------- 机构与科室 ----------
+
+    public List<Map<String, Object>> topLevelGroups() {
+        return paged("/admin/realms/{realm}/groups?briefRepresentation=false", properties.realm());
+    }
+
     public List<Map<String, Object>> childGroups(String groupId) {
-        List<Map<String, Object>> groups = get(
-                "/admin/realms/{realm}/groups/{id}/children?briefRepresentation=false",
-                properties.realm(), groupId)
-                .retrieve()
-                .body(List.class);
-        return groups == null ? List.of() : groups;
+        return paged("/admin/realms/{realm}/groups/{id}/children?briefRepresentation=false",
+                properties.realm(), groupId);
     }
 
     // ---------- 机构与科室的增删改 ----------
@@ -381,7 +387,7 @@ public class KeycloakAdminClient {
             if (location != null) {
                 return location.substring(location.lastIndexOf('/') + 1);
             }
-            throw new IllegalStateException("保存失败：Keycloak 未返回新建对象的位置");
+            throw new IllegalStateException("保存失败：认证内核未返回新建的记录");
         } catch (RestClientResponseException ex) {
             throw new IllegalStateException(readableError(ex), ex);
         }
@@ -482,13 +488,8 @@ public class KeycloakAdminClient {
     }
 
     /** 某个机构或科室下的人员。 */
-    @SuppressWarnings("unchecked")
     public List<Map<String, Object>> groupMembers(String groupId) {
-        List<Map<String, Object>> members = get(
-                "/admin/realms/{realm}/groups/{id}/members?max=2000", properties.realm(), groupId)
-                .retrieve()
-                .body(List.class);
-        return members == null ? List.of() : members;
+        return paged("/admin/realms/{realm}/groups/{id}/members", properties.realm(), groupId);
     }
 
     // ---------- 业务系统维护 ----------

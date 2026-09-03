@@ -3,6 +3,7 @@
 <head th:replace="~{admin/shell :: head(${form.isDepartment()} ? '科室' : '机构')}"></head>
 <body>
 <div th:replace="~{admin/shell :: nav('organizations')}"></div>
+<div th:replace="~{admin/shell :: confirm}"></div>
 
 <main class="admin-main narrow">
     <div th:replace="~{admin/shell :: flash}"></div>

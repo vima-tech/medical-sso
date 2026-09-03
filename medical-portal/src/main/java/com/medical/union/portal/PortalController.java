@@ -1,6 +1,7 @@
 package com.medical.union.portal;
 
 import com.medical.union.portal.admin.ApplicationDirectory;
+import com.medical.union.portal.admin.OrganizationDirectory;
 import com.medical.union.sso.MedicalRoleExtractor;
 import com.medical.union.sso.MedicalUserMapper;
 import org.springframework.beans.factory.ObjectProvider;
@@ -12,6 +13,7 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 
 import java.util.List;
+import java.util.Map;
 
 @Controller
 public class PortalController {
@@ -20,16 +22,30 @@ public class PortalController {
     private final String accountUrl;
     private final boolean subsystemAdminEnabled;
     private final ObjectProvider<ApplicationDirectory> applicationDirectory;
+    private final ObjectProvider<OrganizationDirectory> organizationDirectory;
 
     public PortalController(
             MedicalUserMapper userMapper,
             @Value("${portal.account-url}") String accountUrl,
             @Value("${portal.admin.enabled:true}") boolean subsystemAdminEnabled,
-            ObjectProvider<ApplicationDirectory> applicationDirectory) {
+            ObjectProvider<ApplicationDirectory> applicationDirectory,
+            ObjectProvider<OrganizationDirectory> organizationDirectory) {
         this.userMapper = userMapper;
         this.accountUrl = accountUrl;
         this.subsystemAdminEnabled = subsystemAdminEnabled;
         this.applicationDirectory = applicationDirectory;
+        this.organizationDirectory = organizationDirectory;
+    }
+
+    /**
+     * 把机构、科室编码换成中文名。
+     *
+     * <p>门户是普通医护每天看的页面，显示 H001、D001 对他们没有任何意义。
+     * 管理功能关闭时取不到名称目录，此时退回显示编码，至少不是空白。
+     */
+    private Map<String, String> organizationNames() {
+        OrganizationDirectory directory = organizationDirectory.getIfAvailable();
+        return directory == null ? Map.of() : directory.nameByCode();
     }
 
     /**
@@ -54,6 +70,7 @@ public class PortalController {
                 : directory.forUser(principal.getClaims());
 
         model.addAttribute("medicalUser", userMapper.fromClaims(principal.getClaims()));
+        model.addAttribute("orgNames", organizationNames());
         model.addAttribute("applications", applications);
         model.addAttribute("accountUrl", accountUrl);
         model.addAttribute("subsystemAdmin", isPlatformAdmin(principal));

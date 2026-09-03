@@ -1,12 +1,13 @@
 <!doctype html>
 <html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{admin/shell :: head('登记子系统')}"></head>
+<head th:replace="~{admin/shell :: head('登记业务系统')}"></head>
 <body>
 <div th:replace="~{admin/shell :: nav('subsystems')}"></div>
+<div th:replace="~{admin/shell :: confirm}"></div>
 
 <main class="admin-main narrow">
-    <h1>登记子系统</h1>
-    <p class="hint">只需要四项。回调地址、退出返回地址、Web Origin 和 PKCE 全部自动配置。</p>
+    <h1>登记业务系统</h1>
+    <p class="hint">只需要四项。回调地址、退出返回地址、跨域来源和登录防截获保护，全部自动配置。</p>
 
     <form class="stack-form" th:action="@{/admin/subsystems}" th:object="${form}" method="post">
         <label>
@@ -30,14 +31,23 @@
         </label>
 
         <fieldset class="stack-choice">
-            <legend>子系统技术栈</legend>
+            <legend>接入方式</legend>
+            <p class="group-hint">决定生成哪一套对接说明。选错了可以在系统详情页改。</p>
             <label class="radio">
                 <input type="radio" th:field="*{stack}" value="boot2">
-                <span>Spring Boot 2.x / JDK 8</span>
+                <span>Spring Boot 2.x / JDK 8<em>最常见，加两段配置</em></span>
             </label>
             <label class="radio">
                 <input type="radio" th:field="*{stack}" value="boot3">
-                <span>Spring Boot 3.x / JDK 17+</span>
+                <span>Spring Boot 3.x / JDK 17+<em>加两段配置</em></span>
+            </label>
+            <label class="radio">
+                <input type="radio" th:field="*{stack}" value="bridge">
+                <span>已有账号密码登录<em>要两种登录并存；只需实现一个接口，原有登录不受影响</em></span>
+            </label>
+            <label class="radio">
+                <input type="radio" th:field="*{stack}" value="gateway">
+                <span>改不动的系统<em>不是 Java、没有源码、或动不了代码；在它前面挂一个接入网关，业务系统零改动</em></span>
             </label>
             <em class="field-error" th:if="${#fields.hasErrors('stack')}" th:errors="*{stack}">错误</em>
         </fieldset>

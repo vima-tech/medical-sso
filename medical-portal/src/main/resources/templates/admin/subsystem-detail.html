@@ -3,6 +3,7 @@
 <head th:replace="~{admin/shell :: head('业务系统')}"></head>
 <body>
 <div th:replace="~{admin/shell :: nav('subsystems')}"></div>
+<div th:replace="~{admin/shell :: confirm}"></div>
 
 <main class="admin-main narrow">
     <div th:replace="~{admin/shell :: flash}"></div>
@@ -50,10 +51,12 @@
         </label>
 
         <fieldset class="choice-group">
-            <legend>子系统技术栈</legend>
-            <p class="group-hint">决定对接文档给出哪一套代码。</p>
+            <legend>接入方式</legend>
+            <p class="group-hint">决定对接文档给出哪一套说明。改动接入方式后回调地址会一并调整。</p>
             <label class="checkbox"><input type="radio" th:field="*{stack}" value="boot2"><span>Spring Boot 2.x / JDK 8</span></label>
             <label class="checkbox"><input type="radio" th:field="*{stack}" value="boot3"><span>Spring Boot 3.x / JDK 17+</span></label>
+            <label class="checkbox"><input type="radio" th:field="*{stack}" value="bridge"><span>已有账号密码登录（桥接模式）</span></label>
+            <label class="checkbox"><input type="radio" th:field="*{stack}" value="gateway"><span>改不动的系统（接入网关）</span></label>
         </fieldset>
 
         <div class="form-actions">
@@ -73,7 +76,9 @@
             <li th:each="role : ${subsystem.businessRoles()}">
                 <code th:text="${role}">outpatient-doctor</code>
                 <form th:action="@{'/admin/subsystems/' + ${subsystem.clientId()} + '/roles/' + ${role} + '/delete'}"
-                      method="post" class="inline-form">
+                      method="post" class="inline-form"
+                      th:attr="data-confirm='删除角色「' + ${role} + '」后，已分配该角色的人员会立即失去对应权限。'"
+                      data-confirm-title="删除角色" data-confirm-ok="删除">
                     <button type="submit" class="link-button danger">删除</button>
                 </form>
             </li>
@@ -88,7 +93,9 @@
     <section class="danger-zone">
         <h2>Client Secret</h2>
         <p>重新生成后旧 Secret 立即失效，该业务系统必须同步更新配置，否则会登录失败。仅在泄露或遗失时使用。</p>
-        <form method="post" th:action="@{'/admin/subsystems/' + ${subsystem.clientId()} + '/secret'}">
+        <form method="post" th:action="@{'/admin/subsystems/' + ${subsystem.clientId()} + '/secret'}"
+              data-confirm="重新生成后旧 Secret 立即失效。在该系统同步更新配置之前，它的所有登录都会失败。"
+              data-confirm-title="重新生成 Secret" data-confirm-ok="重新生成">
             <button class="quiet-button" type="submit">重新生成 Secret</button>
         </form>
     </section>
@@ -97,11 +104,18 @@
         <h2>停用与删除</h2>
         <p>停用后该系统立即无法登录，配置保留，可随时恢复。删除会一并移除它的角色，且要求先在授权中心收回全部人员权限。</p>
         <div class="inline-reset">
-            <form method="post" th:action="@{'/admin/subsystems/' + ${subsystem.clientId()} + '/enabled'}" class="inline-form">
+            <form method="post" th:action="@{'/admin/subsystems/' + ${subsystem.clientId()} + '/enabled'}" class="inline-form"
+                  th:attr="data-confirm=${subsystem.enabled()}
+                      ? '停用后「' + ${subsystem.name()} + '」立即无法登录，配置保留，可随时恢复。'
+                      : '启用后「' + ${subsystem.name()} + '」将恢复登录。'"
+                  th:data-confirm-title="${subsystem.enabled()} ? '停用该系统' : '启用该系统'"
+                  th:data-confirm-ok="${subsystem.enabled()} ? '停用' : '启用'">
                 <input type="hidden" name="enabled" th:value="${!subsystem.enabled()}">
                 <button class="quiet-button" type="submit" th:text="${subsystem.enabled()} ? '停用该系统' : '启用该系统'">停用该系统</button>
             </form>
-            <form method="post" th:action="@{'/admin/subsystems/' + ${subsystem.clientId()} + '/delete'}" class="inline-form">
+            <form method="post" th:action="@{'/admin/subsystems/' + ${subsystem.clientId()} + '/delete'}" class="inline-form"
+                  th:attr="data-confirm='确定删除「' + ${subsystem.name()} + '」吗？它的角色会一并移除，接入配置需要重新登记。此操作不可撤销。'"
+                  data-confirm-title="删除业务系统" data-confirm-ok="删除">
                 <button class="link-button danger" type="submit">删除该系统</button>
             </form>
         </div>

@@ -17,6 +17,12 @@ public class SubsystemRegistry {
     /** Spring Security 的固定回调路径，与接入文档中的 registration id 对应。 */
     public static final String REDIRECT_PATH = "/login/oauth2/code/medical-sso";
 
+    /** 桥接模式由组件自带的端点接收回调。 */
+    public static final String BRIDGE_REDIRECT_PATH = "/api/auth/sso/callback";
+
+    /** 接入网关自己接收回调，路径与 Spring 组件不同。 */
+    public static final String GATEWAY_REDIRECT_PATH = "/__sso/callback";
+
     /** 登记时选的技术栈存在客户端属性里，重新打开对接文档时才能给回同一套代码。 */
     static final String STACK_ATTRIBUTE = "medical.subsystem.stack";
 
@@ -100,7 +106,7 @@ public class SubsystemRegistry {
         updated.put("name", form.getName());
         updated.put("rootUrl", baseUrl);
         updated.put("baseUrl", baseUrl);
-        updated.put("redirectUris", List.of(baseUrl + REDIRECT_PATH));
+        updated.put("redirectUris", List.of(baseUrl + redirectPath(form.getStack())));
         updated.put("webOrigins", List.of(baseUrl));
         Map<String, Object> attributes = new LinkedHashMap<>();
         if (client.get("attributes") instanceof Map<?, ?> existing) {
@@ -161,6 +167,17 @@ public class SubsystemRegistry {
         return client;
     }
 
+    /** 回调地址落在哪个路径上，取决于这个系统用哪种方式接入。 */
+    public static String redirectPath(String stack) {
+        if (SubsystemForm.Stack.GATEWAY.equals(stack)) {
+            return GATEWAY_REDIRECT_PATH;
+        }
+        if (SubsystemForm.Stack.BRIDGE.equals(stack)) {
+            return BRIDGE_REDIRECT_PATH;
+        }
+        return REDIRECT_PATH;
+    }
+
     private Map<String, Object> clientRepresentation(String clientId, String name, String baseUrl, String stack) {
         Map<String, Object> attributes = new LinkedHashMap<>();
         attributes.put("pkce.code.challenge.method", "S256");
@@ -190,7 +207,7 @@ public class SubsystemRegistry {
         client.put("frontchannelLogout", true);
         client.put("rootUrl", baseUrl);
         client.put("baseUrl", baseUrl);
-        client.put("redirectUris", List.of(baseUrl + REDIRECT_PATH));
+        client.put("redirectUris", List.of(baseUrl + redirectPath(stack)));
         client.put("webOrigins", List.of(baseUrl));
         client.put("attributes", attributes);
         // 只引用本 Realm 实际定义的 Scope。Realm 导入时 clientScopes 数组会替换内置集合，

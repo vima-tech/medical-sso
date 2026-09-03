@@ -24,4 +24,16 @@ public record IntegrationGuide(
     public boolean isBoot2() {
         return SubsystemForm.Stack.BOOT2.equals(stack);
     }
+
+    public boolean isBoot3() {
+        return SubsystemForm.Stack.BOOT3.equals(stack);
+    }
+
+    public boolean isBridge() {
+        return SubsystemForm.Stack.BRIDGE.equals(stack);
+    }
+
+    public boolean isGateway() {
+        return SubsystemForm.Stack.GATEWAY.equals(stack);
+    }
 }

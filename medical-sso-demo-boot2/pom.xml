@@ -14,7 +14,7 @@
 
     <groupId>com.medical.union</groupId>
     <artifactId>medical-sso-demo-boot2</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>0.1.0</version>
     <name>medical-sso-demo-boot2</name>
     <description>JDK 8 子系统最小接入示例</description>
 
@@ -28,7 +28,7 @@
         <dependency>
             <groupId>com.medical.union</groupId>
             <artifactId>medical-sso-spring-boot2-starter</artifactId>
-            <version>0.1.0-SNAPSHOT</version>
+            <version>0.1.0</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>

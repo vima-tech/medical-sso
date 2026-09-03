@@ -23,13 +23,17 @@ public class SubsystemForm {
             message = "系统访问地址需以 http:// 或 https:// 开头，例如 https://his.intra.example")
     private String baseUrl;
 
-    /** boot3 或 boot2，决定生成哪一套对接代码。 */
-    @NotBlank(message = "请选择子系统技术栈")
+    /** boot3、boot2、bridge 或 gateway，决定生成哪一套对接说明。 */
+    @NotBlank(message = "请选择接入方式")
     private String stack = Stack.BOOT2;
 
     public static final class Stack {
         public static final String BOOT3 = "boot3";
         public static final String BOOT2 = "boot2";
+        /** 已有账号体系：保留原登录，用桥接模式接上统一身份，两种登录并存。 */
+        public static final String BRIDGE = "bridge";
+        /** 改不动的系统：登录在接入网关上完成，业务系统一行代码都不用改。 */
+        public static final String GATEWAY = "gateway";
 
         private Stack() {
         }

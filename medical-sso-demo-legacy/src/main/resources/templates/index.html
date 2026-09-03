@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>检验信息系统</title>
+    <link rel="stylesheet" th:href="@{/css/legacy.css}">
+</head>
+<body>
+<header class="topbar">
+    <div>
+        <strong>检验信息系统</strong>
+        <small>已有账号体系的子系统接入示例</small>
+    </div>
+    <form method="post" th:action="@{/logout}">
+        <button class="quiet" type="submit">退出</button>
+    </form>
+</header>
+
+<main class="content">
+    <h1>你好，<span th:text="${account.displayName}">张三（旧账号）</span></h1>
+    <p class="hint">
+        登录态由本系统自己的令牌维持，与接入前完全相同。
+        统一身份只负责确认「你是谁」，凭证仍由本系统签发。
+    </p>
+
+    <table class="table">
+        <thead>
+        <tr><th>本系统账号</th><th>显示名</th><th>已绑定的统一人员标识</th></tr>
+        </thead>
+        <tbody>
+        <tr th:each="row : ${accounts}" th:classappend="${row.username == account.username} ? 'me' : ''">
+            <td><code th:text="${row.username}">zs</code></td>
+            <td th:text="${row.displayName}">张三（旧账号）</td>
+            <td>
+                <code th:if="${row.personId}" th:text="${row.personId}">P000123</code>
+                <span class="muted" th:unless="${row.personId}">未绑定</span>
+            </td>
+        </tr>
+        </tbody>
+    </table>
+</main>
+</body>
+</html>

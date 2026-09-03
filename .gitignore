@@ -5,6 +5,8 @@ target/
 
 # 本地环境与密钥，不入库
 .env
+.env.production
+backups/
 
 # IDE
 .idea/
@@ -14,3 +16,6 @@ target/
 # 临时文件
 *.log
 *.bak
+
+# 编辑器扩展产物，非交付内容
+.github/modernize/

@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>绑定原有账号 · 检验信息系统</title>
+    <link rel="stylesheet" th:href="@{/css/legacy.css}">
+</head>
+<body class="page">
+<main class="shell">
+    <section class="brand">
+        <div class="mark">检</div>
+        <h1>绑定原有账号</h1>
+        <p class="sub">只需一次，之后统一身份登录即可直接进入</p>
+    </section>
+
+    <section class="card">
+        <p class="notice">
+            <span th:if="${name}" th:text="${name}">张三</span><span th:unless="${name}">您</span>
+            已通过统一身份认证。本系统还不知道这对应哪个原有账号，
+            请用原来的账号密码验证一次完成绑定。
+        </p>
+        <p class="alert" th:if="${reason}" th:text="${reason}">提示</p>
+
+        <form method="post" th:action="@{/sso/bind}">
+            <input type="hidden" name="bindTicket" th:value="${bindTicket}">
+            <input type="hidden" name="redirect" th:value="${redirect}">
+            <label>
+                <span>原系统账号</span>
+                <input type="text" name="username" autocomplete="username" required>
+            </label>
+            <label>
+                <span>原密码</span>
+                <input type="password" name="password" autocomplete="current-password" required>
+            </label>
+            <button class="primary" type="submit">确认绑定</button>
+        </form>
+        <p class="hint">
+            想不起原账号？联系本机构信息科，由管理员核对后为您绑定。
+            不要使用同事的账号——绑定后您将看到对方的数据权限。
+        </p>
+    </section>
+</main>
+</body>
+</html>

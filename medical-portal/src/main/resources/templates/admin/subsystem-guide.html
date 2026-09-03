@@ -3,6 +3,7 @@
 <head th:replace="~{admin/shell :: head('对接文档')}"></head>
 <body>
 <div th:replace="~{admin/shell :: nav('subsystems')}"></div>
+<div th:replace="~{admin/shell :: confirm}"></div>
 
 <main class="admin-main">
     <section class="admin-heading">
@@ -17,13 +18,17 @@
             <a th:href="@{'/admin/subsystems/' + ${guide.clientId()} + '/guide'(stack='boot2')}"
                th:classappend="${guide.isBoot2()} ? 'active' : ''">JDK 8</a>
             <a th:href="@{'/admin/subsystems/' + ${guide.clientId()} + '/guide'(stack='boot3')}"
-               th:classappend="${guide.isBoot2()} ? '' : 'active'">JDK 17+</a>
+               th:classappend="${guide.isBoot3()} ? 'active' : ''">JDK 17+</a>
+            <a th:href="@{'/admin/subsystems/' + ${guide.clientId()} + '/guide'(stack='bridge')}"
+               th:classappend="${guide.isBridge()} ? 'active' : ''">已有登录体系</a>
+            <a th:href="@{'/admin/subsystems/' + ${guide.clientId()} + '/guide'(stack='gateway')}"
+               th:classappend="${guide.isGateway()} ? 'active' : ''">改不动的系统</a>
         </div>
     </section>
 
     <div class="secret-box" th:if="${guide.secretVisible()}">
         <strong>Client Secret 只显示这一次</strong>
-        <p>关闭页面后无法再次查看，请立即交给子系统负责人，并保存在密钥系统中。下面的配置片段不含 Secret，
+        <p>关闭页面后无法再次查看，请立即交给该系统负责人，并保存在密钥系统中。下面的配置片段不含 Secret，
             只留环境变量占位，可以安全地提交进代码库。</p>
         <div class="copy-row">
             <code th:text="${guide.clientSecret()}">secret</code>
@@ -59,17 +64,67 @@
     <section class="snippet">
         <div class="snippet-head">
             <div>
-                <h2>6. 分配访问角色</h2>
+                <!-- 编号跟着上面的片段数量走：桥接与网关比标准接入多一节，写死就会撞号 -->
+                <h2 th:text="${#lists.size(guide.snippets()) + 1} + '. 分配访问角色'">6. 分配访问角色</h2>
                 <p>接入代码就绪后，还要在统一认证里给用户分配本系统的 <code>access</code> 角色，否则登录后会返回 403。</p>
             </div>
         </div>
         <ul class="checklist">
             <li>本系统已自动创建 <code>access</code> 角色，无需手工新建。</li>
-            <li>在 Keycloak 用户的 Role mapping 中，按 Client 过滤到
-                <code th:text="${guide.clientId()}">his-web</code> 并分配 <code>access</code>。</li>
-            <li>系统内部的菜单、岗位和数据权限仍由子系统自己管理，按
+            <li>在本平台的「授权中心」里，为需要使用本系统的人员勾选
+                <span th:text="${guide.name()}">住院系统</span>，即完成授权。</li>
+            <li>系统内部的菜单、岗位和数据权限仍由业务系统自己管理，按
                 <code>personId</code> 关联本地用户。</li>
         </ul>
+    </section>
+
+    <!--
+      收尾这一节不是凑数：实际接入里最耗时的不是配置，而是「配完了登不进去、
+      又看不出卡在哪一步」。先跑自检，再对着下面三条排查，比翻日志快。
+    -->
+    <section class="snippet">
+        <div class="snippet-head">
+            <div>
+                <h2 th:text="${#lists.size(guide.snippets()) + 2} + '. 配完怎么验证'">7. 配完怎么验证</h2>
+                <p>先跑一次自检，平台会把它这一侧能判断的都逐项检查一遍并给出修复动作。</p>
+            </div>
+            <a class="quiet-button" th:href="@{'/admin/subsystems/' + ${guide.clientId()} + '/check'}">
+                运行接入自检
+            </a>
+        </div>
+
+        <p class="hint">自检通过后再试一次真实登录。下面三条覆盖了绝大多数「配完却进不去」：</p>
+
+        <table class="data-table">
+            <thead>
+            <tr>
+                <th>症状</th>
+                <th>多半是什么原因</th>
+                <th>怎么改</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr>
+                <td>登录后一直跳回登录页</td>
+                <td>服务端拼出来的回调地址与登记值对不上</td>
+                <td>登记值是
+                    <code th:text="${guide.redirectUri()}">https://his.intra.example/login/oauth2/code/medical-sso</code>；
+                    确认浏览器访问的域名与协议和它完全一致，且应用配了
+                    <code>forward-headers-strategy: framework</code></td>
+            </tr>
+            <tr>
+                <td>能登录，但进去就是 403</td>
+                <td>这个人没有本系统的 <code>access</code> 角色</td>
+                <td>去「授权中心」给他勾选
+                    <span th:text="${guide.name()}">本系统</span></td>
+            </tr>
+            <tr>
+                <td>能进去，但拿不到工号／机构／科室</td>
+                <td>身份字段没下发，或取值方式不对</td>
+                <td>自检的「下发人员身份字段」一项会直接报出来；已通过则检查取用户的代码</td>
+            </tr>
+            </tbody>
+        </table>
     </section>
 </main>
 

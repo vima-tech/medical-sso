@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>登录 · 检验信息系统</title>
+    <link rel="stylesheet" th:href="@{/css/legacy.css}">
+</head>
+<body class="page">
+<main class="shell">
+    <section class="brand">
+        <div class="mark">检</div>
+        <h1>检验信息系统</h1>
+        <p class="sub">已有账号体系的子系统接入示例</p>
+    </section>
+
+    <section class="card">
+        <p class="alert" th:if="${reason}" th:text="${reason}">提示</p>
+
+        <a class="primary" th:href="@{/api/auth/sso/start(redirect='/')}">统一身份登录</a>
+        <p class="hint">使用医共体统一的工号与密码。首次使用会引导您绑定原有账号。</p>
+
+        <details class="fallback" th:if="${localLogin != 'DISABLED'}">
+            <summary>其他登录方式</summary>
+            <p class="hint" th:if="${localLogin == 'EMERGENCY_ONLY'}">
+                本系统已改用统一身份登录，此入口仅供应急账号使用。
+            </p>
+            <form method="post" th:action="@{/login}">
+                <label>
+                    <span>原系统账号</span>
+                    <input type="text" name="username" autocomplete="username" required>
+                </label>
+                <label>
+                    <span>密码</span>
+                    <input type="password" name="password" autocomplete="current-password" required>
+                </label>
+                <button class="secondary" type="submit">用原账号登录</button>
+            </form>
+        </details>
+    </section>
+
+    <footer class="foot">内部系统，仅限授权人员使用</footer>
+</main>
+</body>
+</html>

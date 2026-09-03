@@ -44,21 +44,48 @@ public class ApplicationDirectory {
                 continue;   // 没登记访问地址就没法跳转
             }
             String name = text(client.get("name"));
+            String display = name == null ? clientId : name;
             applications.add(new Application(
-                    name == null ? clientId : name,
+                    display,
                     text(client.get("description")),
                     url,
-                    badge(clientId)));
+                    badge(display)));
         }
         applications.sort((a, b) -> a.name().compareTo(b.name()));
         return applications;
     }
 
-    /** 卡片右上角的短标记，取系统编码的前几位。 */
-    private static String badge(String clientId) {
-        String cleaned = clientId.replace("medical-", "");
-        String head = cleaned.length() <= 6 ? cleaned : cleaned.substring(0, 6);
-        return head.toUpperCase(java.util.Locale.ROOT);
+    /**
+     * 卡片上的图标文字。
+     *
+     * <p>取系统名称的首字，而不是英文编码：门户是医护每天进的页面，
+     * 「检验」比 <code>DEMO-L</code> 好认得多，而按编码截断还会把
+     * <code>gateway-demo</code> 切成半个词。
+     */
+    static String badge(String name) {
+        StringBuilder cjk = new StringBuilder();
+        for (int i = 0; i < name.length() && cjk.length() < 2; i++) {
+            char c = name.charAt(i);
+            if (c >= 0x4E00 && c <= 0x9FFF) {
+                cjk.append(c);
+            } else if (cjk.length() > 0) {
+                break;   // 中文词遇到括号、空格就断开，不要跨词拼字
+            }
+        }
+        if (cjk.length() > 0) {
+            return cjk.toString();
+        }
+        // 英文名取前两位，如 Spring Boot 接入示例 -> SP
+        StringBuilder latin = new StringBuilder();
+        for (int i = 0; i < name.length() && latin.length() < 2; i++) {
+            char c = name.charAt(i);
+            if (Character.isLetterOrDigit(c)) {
+                latin.append(c);
+            }
+        }
+        return latin.length() > 0
+                ? latin.toString().toUpperCase(java.util.Locale.ROOT)
+                : "应用";
     }
 
     private static String text(Object value) {

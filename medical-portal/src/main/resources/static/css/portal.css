@@ -74,7 +74,26 @@ body {
   white-space: nowrap;
 }
 .account-link { color: var(--primary); font-weight: 700; text-decoration: none; }
-.quiet-button { border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; }
+/* 次按钮也会以 <a> 出现，自己声明 text-decoration，不要依赖外层容器的链接规则 */
+.primary-button {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.62rem 1.15rem;
+  border: 1px solid var(--primary);
+  border-radius: 0.6rem;
+  background: var(--primary);
+  color: #fff;
+  font-size: 0.88rem;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.primary-button:hover { background: var(--primary-strong); border-color: var(--primary-strong); }
+.primary-button:active { transform: translateY(1px); }
+
+.quiet-button { border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; text-decoration: none; }
 .account-link:hover { color: var(--primary-strong); }
 .quiet-button:hover { border-color: var(--primary); color: var(--primary); }
 .quiet-button:active { transform: translateY(1px); }
@@ -198,4 +217,41 @@ button:focus-visible { outline: 3px solid rgba(8, 117, 104, 0.2); outline-offset
   *,
   *::before,
   *::after { transition-duration: 0.01ms !important; }
+}
+
+/* ===== 登录未完成 ===== */
+
+.login-failed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  width: auto;
+  padding: 0 1rem;
+}
+
+.login-failed-card {
+  width: min(26rem, 100%);
+  padding: 2.2rem 2rem 1.8rem;
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  background: var(--surface);
+  text-align: center;
+}
+
+.login-failed-card .brand-mark { margin: 0 auto 1rem; }
+.login-failed-card h1 { margin: 0 0 0.7rem; font-size: 1.2rem; }
+
+.login-failed-reason {
+  margin: 0 0 1.4rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.85;
+}
+
+.login-failed-foot {
+  margin: 1rem 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.7;
 }

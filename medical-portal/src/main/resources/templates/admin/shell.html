@@ -37,6 +37,60 @@
     </header>
 </th:block>
 
+<!--
+  破坏性操作的二次确认。用原生 <dialog>：样式能与产品统一，
+  焦点管理和 Esc 关闭由浏览器负责，不用自己实现，也不用 confirm() 那种系统弹框。
+  接入方式：给 form 加 data-confirm（正文）和可选的 data-confirm-title、data-confirm-ok。
+-->
+<th:block th:fragment="confirm">
+    <dialog class="confirm-dialog" id="confirmDialog">
+        <form method="dialog">
+            <h2 data-confirm-slot="title">确认操作</h2>
+            <p data-confirm-slot="message">确定要执行该操作吗？</p>
+            <div class="confirm-actions">
+                <button class="quiet-button" value="cancel">取消</button>
+                <button class="primary-button danger-button" value="ok" data-confirm-slot="ok">确定</button>
+            </div>
+        </form>
+    </dialog>
+    <script>
+        (function () {
+            var dialog = document.getElementById('confirmDialog');
+            if (!dialog || typeof dialog.showModal !== 'function') {
+                return;   // 老浏览器不支持时不拦截，行为退回改动前
+            }
+            var slots = {
+                title: dialog.querySelector('[data-confirm-slot="title"]'),
+                message: dialog.querySelector('[data-confirm-slot="message"]'),
+                ok: dialog.querySelector('[data-confirm-slot="ok"]')
+            };
+            var pending = null;
+
+            document.addEventListener('submit', function (event) {
+                var form = event.target;
+                if (!form.hasAttribute('data-confirm') || form === pending) {
+                    return;
+                }
+                event.preventDefault();
+                slots.title.textContent = form.getAttribute('data-confirm-title') || '确认操作';
+                slots.message.textContent = form.getAttribute('data-confirm');
+                slots.ok.textContent = form.getAttribute('data-confirm-ok') || '确定';
+                pending = form;
+                dialog.showModal();
+            });
+
+            dialog.addEventListener('close', function () {
+                var form = pending;
+                pending = null;
+                if (form && dialog.returnValue === 'ok') {
+                    // 已经确认过，这次提交不再拦截
+                    form.submit();
+                }
+            });
+        })();
+    </script>
+</th:block>
+
 <th:block th:fragment="flash">
     <div class="flash ok" th:if="${notice}" th:text="${notice}">操作成功</div>
     <div class="flash bad" th:if="${error}" th:text="${error}">操作失败</div>

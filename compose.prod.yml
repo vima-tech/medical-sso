@@ -1,0 +1,76 @@
+name: medical-sso-prod
+
+services:
+  postgres:
+    image: docker.io/library/postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?请配置 POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:?请配置 POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请通过密钥系统注入 POSTGRES_PASSWORD}
+    volumes:
+      - keycloak-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.3
+    command: ["start", "--import-realm", "--features-disabled=admin"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME:?请配置引导管理员}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD:?请通过密钥系统注入引导密码}
+      KC_DB: postgres
+      KC_DB_URL_HOST: postgres
+      KC_DB_URL_DATABASE: ${POSTGRES_DB:?请配置 POSTGRES_DB}
+      KC_DB_USERNAME: ${POSTGRES_USER:?请配置 POSTGRES_USER}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:?请通过密钥系统注入 POSTGRES_PASSWORD}
+      KC_HTTP_ENABLED: "true"
+      KC_HTTP_RELATIVE_PATH: /auth
+      KC_HOSTNAME: https://${SSO_HOSTNAME:?请配置 SSO_HOSTNAME}/auth
+      KC_HOSTNAME_STRICT: "true"
+      KC_PROXY_HEADERS: xforwarded
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+    volumes:
+      - ${REALM_IMPORT_DIR:?请先生成生产 Realm}:/opt/keycloak/data/import:ro,z
+      - ./deploy/keycloak/themes:/opt/keycloak/themes:ro,z
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  portal:
+    build:
+      context: .
+      dockerfile: deploy/Containerfile
+    environment:
+      PORTAL_PORT: 8080
+      SSO_ISSUER: https://${SSO_HOSTNAME:?请配置 SSO_HOSTNAME}/auth/realms/medical
+      SSO_ACCOUNT_URL: https://${SSO_HOSTNAME:?请配置 SSO_HOSTNAME}/auth/realms/medical/account
+      SSO_ADMIN_CLIENT_SECRET: ${SSO_ADMIN_CLIENT_SECRET:?请通过密钥系统注入管理服务 Secret}
+      SSO_PORTAL_CLIENT_SECRET: ${SSO_PORTAL_CLIENT_SECRET:?请通过密钥系统注入门户登录 Secret}
+    depends_on:
+      - keycloak
+    restart: unless-stopped
+
+  gateway:
+    image: docker.io/library/nginx:1.28-alpine
+    environment:
+      SSO_HOSTNAME: ${SSO_HOSTNAME:?请配置 SSO_HOSTNAME}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/gateway/nginx.prod.conf.template:/etc/nginx/templates/default.conf.template:ro,Z
+      - ${TLS_CERT_FILE:?请配置 TLS_CERT_FILE}:/etc/nginx/tls/tls.crt:ro,Z
+      - ${TLS_KEY_FILE:?请配置 TLS_KEY_FILE}:/etc/nginx/tls/tls.key:ro,Z
+    depends_on:
+      - keycloak
+      - portal
+    restart: unless-stopped
+
+volumes:
+  keycloak-postgres:
